@@ -1102,5 +1102,5 @@ INSERT INTO expense_categories (name, description) VALUES
 ('Marketing', 'Publicidad y promocion'),
 ('Otros', 'Otros gastos del negocio');
 
--- Después de este archivo, correr en orden: 002_cuentas.sql, 003_catalogo.sql y 004_canjes.sql
+-- Después de este archivo, correr en orden los archivos 002 a 008 de esta carpeta
 

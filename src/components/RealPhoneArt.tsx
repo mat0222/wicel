@@ -1,4 +1,4 @@
-import { imageUrl } from "../data";
+import { imageUrl } from "../lib/data";
 
 export function ProductPhoto({ src, alt = "", className = "h-28 w-full" }: { src: string | null; alt?: string; className?: string }) {
   const url = imageUrl(src);

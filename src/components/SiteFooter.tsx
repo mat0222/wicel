@@ -1,5 +1,5 @@
 import { Logo } from "./Logo";
-import type { View } from "../data";
+import type { View } from "../lib/data";
 import type { StoreSettings } from "../lib/api";
 import { consumerDefenseUrl } from "../lib/legal";
 import { email, fullAddress, hours, instagram, instagramUser, phone, phoneHref, shiftsText, whatsapp } from "../lib/store";

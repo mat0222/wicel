@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Icon } from "../components/Icon";
-import { ProductPhoto } from "../components/RealPhoneArt";
-import { cardOffer, cashPrice, conditions, formatPrice, productBadge, stockLabel, type Product, type View } from "../data";
+import { Icon } from "../../components/Icon";
+import { ProductPhoto } from "../../components/RealPhoneArt";
+import { cardOffer, cashPrice, conditions, formatPrice, productBadge, stockLabel, type Product, type View } from "../../lib/data";
 
 const pageSize = 9;
 

@@ -1,73 +1,39 @@
-# React + TypeScript + Vite
+# wicel
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Tienda online y panel de administración de wicel (Villa del Rosario, Córdoba).
 
-Currently, two official plugins are available:
+## Carpetas
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+api/                 API en PHP
+  index.php          todas las rutas /api/...
+  src/               lógica: cuentas, catálogo, pedidos, canjes, legal, seguridad, emails
+  uploads/           fotos que se suben desde el panel (no se guardan en git)
+  config.example.php copiar como config.php y completar
+database/            base MySQL: correr en orden de 001 a 008
+public/              archivos estáticos (logo, banner, fotos de ejemplo, .htaccess)
+scripts/             ayuda para desarrollo (levanta Docker al hacer npm run dev)
+src/                 tienda y panel en React
+  components/        piezas compartidas: encabezado, pie, ventanas de producto
+  lib/               datos, llamadas a la API, textos legales, datos del local
+  pages/tienda/      páginas que ve el cliente
+  pages/admin/       panel del dueño
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Los archivos sueltos en la raíz (`package.json`, `vite.config.ts`, `tsconfig*.json`, `eslint.config.js`, `index.html`, `docker-compose.yml`) tienen que estar ahí: Node, Vite, TypeScript y Docker los buscan en la raíz.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Desarrollo
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. MySQL 8 con la base `wicel` (archivos de `database/`, en orden).
+2. Copiar `api/config.example.php` a `api/config.php` y completar los datos.
+3. `npm install` y después `npm run dev`. Abre Docker con la API y la tienda en http://localhost:5173.
+
+Crear un administrador:
+
 ```
+docker exec proyecto-wicel-api-1 php src/crear-admin.php email@ejemplo.com "ContraseñaLarga123" "Nombre"
+```
+
+## Publicar
+
+`npm run build` genera `dist/`. Subir el contenido de `dist/` y la carpeta `api/` (con su `config.php`) al hosting.

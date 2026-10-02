@@ -12,7 +12,7 @@ import {
   type LegalSettings,
   type Warranty,
   type WarrantyClaim,
-} from "../lib/api";
+} from "../../lib/api";
 import { Screen } from "./AdminDesk";
 
 const input = "mt-1 h-10 w-full rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-3 text-sm text-white placeholder:text-[#7a7a7a]";

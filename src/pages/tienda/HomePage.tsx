@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { BrandBar } from "../components/BrandBar";
-import { Icon } from "../components/Icon";
-import { ProductPhoto } from "../components/RealPhoneArt";
-import { cardOffer, cashPrice, financing, formatPrice, INSTALLMENTS, type Product, type View } from "../data";
-import { address, directions, fullAddress, hours, shiftsText, storeStatus, storeTime, whatsapp } from "../lib/store";
-import { publicUrl } from "../publicUrl";
+import { BrandBar } from "../../components/BrandBar";
+import { Icon } from "../../components/Icon";
+import { ProductPhoto } from "../../components/RealPhoneArt";
+import { cardOffer, cashPrice, financing, formatPrice, INSTALLMENTS, type Product, type View } from "../../lib/data";
+import { address, directions, fullAddress, hours, shiftsText, storeStatus, storeTime, whatsapp } from "../../lib/store";
+import { publicUrl } from "../../lib/publicUrl";
 import { ProductCard } from "./CatalogPage";
 
 export function HomePage({

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Logo } from "../components/Logo";
-import { ProductPhoto } from "../components/RealPhoneArt";
+import { Logo } from "../../components/Logo";
+import { ProductPhoto } from "../../components/RealPhoneArt";
 import {
   deleteCategory,
   deleteProduct,
@@ -12,12 +12,12 @@ import {
   type Account,
   type AdminOptions,
   type Summary,
-} from "../lib/api";
-import { shrinkPhoto } from "../lib/shrinkPhoto";
-import { useSummary } from "../lib/useSummary";
+} from "../../lib/api";
+import { shrinkPhoto } from "../../lib/shrinkPhoto";
+import { useSummary } from "../../lib/useSummary";
 import { AdminDesk } from "./AdminDesk";
 import { AfterSalesDesk, LegalDesk } from "./AdminLegal";
-import { adminNav, cashPrice, formatPrice, imageUrl, LOW_STOCK, rams, type AdminSection, type Product } from "../data";
+import { adminNav, cashPrice, formatPrice, imageUrl, LOW_STOCK, rams, type AdminSection, type Product } from "../../lib/data";
 
 const lightSections = new Set<AdminSection>([
   "productos",

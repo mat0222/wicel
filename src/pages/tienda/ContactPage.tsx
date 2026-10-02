@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Icon, type IconName } from "../components/Icon";
-import { financing, INSTALLMENTS, type View } from "../data";
-import { sendContact } from "../lib/api";
-import { address, city, directions, email, hours, instagram, instagramUser, mapQuery, phone, phoneHref, shiftsText, storeStatus, storeTime, whatsapp } from "../lib/store";
+import { Icon, type IconName } from "../../components/Icon";
+import { financing, INSTALLMENTS, type View } from "../../lib/data";
+import { sendContact } from "../../lib/api";
+import { address, city, directions, email, hours, instagram, instagramUser, mapQuery, phone, phoneHref, shiftsText, storeStatus, storeTime, whatsapp } from "../../lib/store";
 
 export function ContactPage({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [now, setNow] = useState(storeTime);

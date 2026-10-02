@@ -1,4 +1,4 @@
-import { publicUrl } from "../publicUrl";
+import { publicUrl } from "../lib/publicUrl";
 
 export function Logo({ subtitle }: { subtitle?: string }) {
   return (

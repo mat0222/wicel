@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { ProductPhoto } from "../components/RealPhoneArt";
-import { formatPrice, type View } from "../data";
-import { fetchMyRedemptions, fetchRewards, redeemReward, type Account, type PlacedRedemption, type Redemption, type Reward, type StoreSettings } from "../lib/api";
+import { ProductPhoto } from "../../components/RealPhoneArt";
+import { formatPrice, type View } from "../../lib/data";
+import { fetchMyRedemptions, fetchRewards, redeemReward, type Account, type PlacedRedemption, type Redemption, type Reward, type StoreSettings } from "../../lib/api";
 
 const statusTone: Record<Redemption["status"], string> = {
   PENDING: "bg-brand-soft text-gold",

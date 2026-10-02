@@ -1,8 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { CASH_OFF, financing, formatPrice, INSTALLMENTS, type View } from "../data";
-import { lookupOrder, sendRequest, type OrderReceipt, type PlacedRequest, type RequestType, type StoreSettings } from "../lib/api";
-import { consumerDefenseUrl, deliveryText, lastOrder, LEGAL_DATE } from "../lib/legal";
-import { email, fullAddress, hours, phone, shiftsText, whatsapp } from "../lib/store";
+import { CASH_OFF, financing, formatPrice, INSTALLMENTS, type View } from "../../lib/data";
+import { lookupOrder, sendRequest, type OrderReceipt, type PlacedRequest, type RequestType, type StoreSettings } from "../../lib/api";
+import { consumerDefenseUrl, deliveryText, lastOrder, LEGAL_DATE } from "../../lib/legal";
+import { email, fullAddress, hours, phone, shiftsText, whatsapp } from "../../lib/store";
 
 type Doc = "terminos" | "privacidad" | "cookies" | "garantias";
 

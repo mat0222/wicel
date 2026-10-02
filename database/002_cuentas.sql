@@ -1,6 +1,6 @@
 -- Cuentas con dos roles: ADMINISTRADOR (dueño del local) y CLIENTE.
 -- Cada cliente registrado tiene su fila en customers y su cuenta de puntos.
--- Se corre una sola vez sobre una base creada con wicel.sql anterior.
+-- Se corre una sola vez sobre una base creada con 001_base.sql.
 
 USE wicel;
 

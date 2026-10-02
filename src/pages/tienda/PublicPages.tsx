@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Icon } from "../components/Icon";
-import { ProductPhoto } from "../components/RealPhoneArt";
-import { cardOffer, cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, payable, stockLabel, type CartItem, type PaymentId, type Product, type View } from "../data";
-import { placeOrder, type Account, type PlacedOrder, type StoreSettings } from "../lib/api";
-import { LEGAL_VERSION, netOfTaxes, rememberOrder } from "../lib/legal";
-import { fullAddress, whatsapp } from "../lib/store";
+import { Icon } from "../../components/Icon";
+import { ProductPhoto } from "../../components/RealPhoneArt";
+import { cardOffer, cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, payable, stockLabel, type CartItem, type PaymentId, type Product, type View } from "../../lib/data";
+import { placeOrder, type Account, type PlacedOrder, type StoreSettings } from "../../lib/api";
+import { LEGAL_VERSION, netOfTaxes, rememberOrder } from "../../lib/legal";
+import { fullAddress, whatsapp } from "../../lib/store";
 
 export function CombosPage({ products, inCart, onAdd, onNavigate }: { products: Product[] | null; inCart: (variantId: number) => number; onAdd: (variantId: number) => void; onNavigate: (view: View) => void }) {
   const combos = (products ?? []).filter((product) => product.type === "COMBO");

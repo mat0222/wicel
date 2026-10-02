@@ -1,4 +1,4 @@
-import type { PaymentId, Product } from "../data";
+import type { PaymentId, Product } from "./data";
 
 export type StoreSettings = {
   store_name?: string;

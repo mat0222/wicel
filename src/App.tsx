@@ -3,17 +3,17 @@ import { SiteFooter } from "./components/SiteFooter";
 import { fetchCatalog, fetchSession, fetchSettings, logout, type Account, type StoreSettings } from "./lib/api";
 import { AccountDialog, InfoDialog, ProductDialog } from "./components/ShopDialogs";
 import { StoreHeader } from "./components/StoreHeader";
-import { MAX_PER_ITEM, setFinancing, type AdminSection, type CartItem, type Product, type View } from "./data";
+import { MAX_PER_ITEM, setFinancing, type AdminSection, type CartItem, type Product, type View } from "./lib/data";
 import { applyStoreSettings, whatsapp } from "./lib/store";
-import { CatalogPage } from "./pages/CatalogPage";
-import { HomePage } from "./pages/HomePage";
-import { LoginPage, type LoginMode } from "./pages/LoginPage";
-import { ContactPage } from "./pages/ContactPage";
-import { CartPage, CombosPage } from "./pages/PublicPages";
-import { LegalPage, OrderPage, RegretPage } from "./pages/LegalPages";
-import { RewardsPage } from "./pages/RewardsPage";
+import { CatalogPage } from "./pages/tienda/CatalogPage";
+import { HomePage } from "./pages/tienda/HomePage";
+import { LoginPage, type LoginMode } from "./pages/tienda/LoginPage";
+import { ContactPage } from "./pages/tienda/ContactPage";
+import { CartPage, CombosPage } from "./pages/tienda/PublicPages";
+import { LegalPage, OrderPage, RegretPage } from "./pages/tienda/LegalPages";
+import { RewardsPage } from "./pages/tienda/RewardsPage";
 
-const AdminApp = lazy(() => import("./pages/AdminPages").then((module) => ({ default: module.AdminApp })));
+const AdminApp = lazy(() => import("./pages/admin/AdminPages").then((module) => ({ default: module.AdminApp })));
 
 const base = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
 const paths: Record<View, string> = {
@@ -37,9 +37,6 @@ const productPath = /^\/productos\/([a-z0-9-]+)$/;
 const currentPath = () => window.location.pathname.slice(base.length).replace(/\/+$/, "") || "/";
 
 function viewFromLocation(): View {
-  const hash = window.location.hash.replace(/^#\/?/, "").replace(/\/+$/, "");
-  const fromHash = Object.entries(paths).find(([, path]) => hash && path === `/${hash}`);
-  if (fromHash) return fromHash[0] as View;
   const path = currentPath();
   if (productPath.test(path)) return "productos";
   return (Object.entries(paths).find(([, value]) => value === path)?.[0] as View | undefined) ?? "home";
@@ -116,10 +113,8 @@ export default function App() {
       setActive(slugFromLocation());
     };
     window.addEventListener("popstate", onPop);
-    window.addEventListener("hashchange", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
-      window.removeEventListener("hashchange", onPop);
     };
   }, []);
 

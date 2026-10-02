@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { ProductPhoto } from "./RealPhoneArt";
-import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../data";
+import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../lib/data";
 import { fetchMyOrders, type Account, type Order, type StoreSettings } from "../lib/api";
 import { deliveryText, netOfTaxes, warrantyMonths } from "../lib/legal";
 

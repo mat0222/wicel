@@ -1,8 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Icon as StoreIcon } from "../components/Icon";
-import { Logo } from "../components/Logo";
-import { login, register, type Account } from "../lib/api";
-import { fullAddress } from "../lib/store";
+import { Icon as StoreIcon } from "../../components/Icon";
+import { Logo } from "../../components/Logo";
+import { login, register, type Account } from "../../lib/api";
+import { fullAddress } from "../../lib/store";
 
 export type LoginMode = "ingresar" | "registro";
 

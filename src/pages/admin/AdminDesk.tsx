@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
-import { discountPercent, formatPrice, type AdminSection, type Product } from "../data";
+import { discountPercent, formatPrice, type AdminSection, type Product } from "../../lib/data";
 import {
   adjustPoints,
   fetchAccounts,
@@ -25,12 +25,12 @@ import {
   type StoreForm,
   type Redemption,
   type Reward,
-} from "../lib/api";
-import { shrinkPhoto } from "../lib/shrinkPhoto";
-import { ProductPhoto } from "../components/RealPhoneArt";
-import { useSummary } from "../lib/useSummary";
+} from "../../lib/api";
+import { shrinkPhoto } from "../../lib/shrinkPhoto";
+import { ProductPhoto } from "../../components/RealPhoneArt";
+import { useSummary } from "../../lib/useSummary";
 import { KpiCards, SalesChart, TopSellers } from "./AdminPages";
-import { applyStoreSettings, internationalNumber, storeDefaults } from "../lib/store";
+import { applyStoreSettings, internationalNumber, storeDefaults } from "../../lib/store";
 
 export function AdminDesk({ section, onCatalogChange }: { section: AdminSection; onCatalogChange: () => void }) {
   if (section === "reportes") return <Reports />;

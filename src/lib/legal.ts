@@ -1,4 +1,4 @@
-import type { Product } from "../data";
+import type { Product } from "./data";
 import type { StoreSettings } from "./api";
 import { fullAddress } from "./store";
 

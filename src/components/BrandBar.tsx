@@ -1,5 +1,5 @@
 import { ProductPhoto } from "./RealPhoneArt";
-import type { Product } from "../data";
+import type { Product } from "../lib/data";
 
 export function BrandBar({ products, onBrand }: { products: Product[]; onBrand: (brand: string) => void }) {
   const items = products.filter((product) => product.type === "PRODUCT");

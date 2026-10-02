@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
-import type { View } from "../data";
+import type { View } from "../lib/data";
 
 const links: [View, string][] = [
   ["home", "Inicio"],
