@@ -13,6 +13,31 @@ final class Accounts
         LEFT JOIN loyalty_accounts la ON la.customer_id = c.id
         SQL;
 
+    private const COMMON_PASSWORDS = [
+        'password', 'password1', 'password123', 'contraseña', 'contrasena', 'contrasena1', '12345678a', 'qwerty123',
+        'abc12345', 'abcd1234', 'a1234567', 'asdf1234', 'iloveyou1', 'bocajuniors1', 'riverplate1', 'argentina1', 'wicel123',
+    ];
+
+    /** Devuelve qué le falta a la contraseña, o null si sirve. */
+    public static function passwordProblem(string $password, string $email): ?string
+    {
+        $user = strtolower(explode('@', $email)[0]);
+        if (strlen($password) < 8 || strlen($password) > 200) {
+            return 'La contraseña tiene que tener al menos 8 caracteres.';
+        }
+        if (!preg_match('/\pL/u', $password) || !preg_match('/\d/', $password)) {
+            return 'La contraseña tiene que tener letras y números.';
+        }
+        if (in_array(strtolower($password), self::COMMON_PASSWORDS, true) || count(array_unique(mb_str_split(mb_strtolower($password)))) < 4) {
+            return 'Esa contraseña es muy fácil de adivinar. Probá con otra.';
+        }
+        if (strlen($user) >= 4 && str_contains(strtolower($password), $user)) {
+            return 'La contraseña no puede contener tu email.';
+        }
+
+        return null;
+    }
+
     public static function emailTaken(PDO $pdo, string $email): bool
     {
         $stmt = $pdo->prepare('SELECT 1 FROM users WHERE email = ? OR username = ?');

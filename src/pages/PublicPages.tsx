@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon } from "../components/Icon";
 import { ProductPhoto } from "../components/RealPhoneArt";
-import { cardOffer, cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, payable, stockLabel, type CartItem, type PaymentId, type Product, type View } from "../data";
+import { cardOffer, cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, payable, stockLabel, type CartItem, type PaymentId, type Product, type View } from "../data";
 import { placeOrder, type Account, type PlacedOrder, type StoreSettings } from "../lib/api";
 import { LEGAL_VERSION, netOfTaxes, rememberOrder } from "../lib/legal";
 import { fullAddress, whatsapp } from "../lib/store";
@@ -121,7 +121,8 @@ export function CartPage({
   });
   const listTotal = lines.reduce((sum, item) => sum + item.product.price * item.qty, 0);
   const total = payable(listTotal, pago);
-  const overStock = lines.filter((line) => line.qty > line.color.stock);
+  const overStock = lines.filter((line) => line.qty > Math.min(line.color.stock, MAX_PER_ITEM));
+  const holdHours = Number(settings?.order_hold_hours) || 48;
   const methods = payments.filter((method) => (method.id !== "tarjeta-12" || financing.on) && (method.id !== "efectivo" || delivery === "PICKUP"));
   const net = netOfTaxes(total, settings);
 
@@ -233,12 +234,14 @@ export function CartPage({
                     <p className="price text-xs text-muted">Efectivo o transferencia. Tarjeta {formatPrice(item.product.price)}</p>
                     {item.qty > item.color.stock ? (
                       <p role="alert" className="mt-1 text-xs font-semibold text-bad">{item.color.stock === 0 ? "Se quedó sin stock. Sacalo para seguir." : `Solo quedan ${item.color.stock}. Bajá la cantidad.`}</p>
+                    ) : item.qty > MAX_PER_ITEM ? (
+                      <p role="alert" className="mt-1 text-xs font-semibold text-bad">Por pedido se pueden llevar hasta {MAX_PER_ITEM}. Bajá la cantidad o escribinos por WhatsApp.</p>
                     ) : item.color.stock <= 5 ? <p className="mt-1 text-xs font-semibold text-gold">Quedan {item.color.stock}</p> : null}
                   </div>
                   <div className="flex items-center rounded-full border border-line">
                     <button className="h-11 w-11" aria-label={`Quitar una unidad de ${title}`} onClick={() => onQty(item.variantId, Math.max(1, item.qty - 1))}><Icon name="minus" className="mx-auto h-4 w-4" /></button>
                     <span className="price w-6 text-center font-semibold">{item.qty}</span>
-                    <button className="h-11 w-11 disabled:opacity-40" disabled={item.qty >= item.color.stock} aria-label={`Agregar una unidad de ${title}`} onClick={() => onQty(item.variantId, item.qty + 1)}><Icon name="plus" className="mx-auto h-4 w-4" /></button>
+                    <button className="h-11 w-11 disabled:opacity-40" disabled={item.qty >= Math.min(item.color.stock, MAX_PER_ITEM)} aria-label={`Agregar una unidad de ${title}`} onClick={() => onQty(item.variantId, item.qty + 1)}><Icon name="plus" className="mx-auto h-4 w-4" /></button>
                   </div>
                   <button type="button" onClick={() => onRemove(item.variantId)} className="text-sm font-medium text-bad hover:underline">Quitar</button>
                 </article>
@@ -324,7 +327,7 @@ export function CartPage({
                   <p className="mt-2 text-xs text-muted">Cuando transfieras, mandanos el comprobante por WhatsApp con tu número de pedido.</p>
                 </div>
               ) : null}
-              {pago === "efectivo" ? <p className="mt-4 text-sm text-muted">Pagás al retirar en {fullAddress}. Te guardamos el equipo.</p> : null}
+              {pago === "efectivo" ? <p className="mt-4 text-sm text-muted">Pagás al retirar en {fullAddress}. Te guardamos el equipo {holdHours} horas: si no pasás en ese plazo, el pedido se cancela solo.</p> : null}
               {pago.startsWith("tarjeta") ? <p className="mt-4 text-sm text-muted">Te mandamos el link de pago por WhatsApp. No te pedimos datos de la tarjeta en esta página.</p> : null}
               <section aria-labelledby="resumen-final" className="price mt-6 rounded-xl border border-line bg-paper p-4 text-sm">
                 <h3 id="resumen-final" className="font-bold text-ink">Resumen final</h3>
@@ -378,7 +381,7 @@ export function CartPage({
               </span>
               <p className="mt-5 text-sm font-semibold text-muted">Pedido {order.number}</p>
               <h2 id="gracias-titulo" ref={thanksRef} tabIndex={-1} className="mt-2 display text-2xl font-bold outline-none">¡Gracias, {order.name}! Recibimos tu pedido</h2>
-              <p className="mt-2 text-sm text-muted">Te escribimos por WhatsApp al {order.phone} para coordinar el pago y la entrega. Guardá el número de pedido.</p>
+              <p className="mt-2 text-sm text-muted">Te escribimos por WhatsApp al {order.phone} para coordinar el pago y la entrega. Guardá el número de pedido. Te reservamos los productos {order.holdHours} horas: si para entonces no registramos el pago, el pedido se cancela solo.</p>
             </div>
             <div className="space-y-3 px-8 pb-6 text-sm">
               <div className="flex justify-between gap-4"><span className="text-muted">Entrega</span><span className="max-w-[220px] text-right font-semibold text-ink">{order.delivery === "PICKUP" ? `Retiro en ${fullAddress}` : `Envío a ${order.address}. Costo a coordinar antes de pagar`}</span></div>

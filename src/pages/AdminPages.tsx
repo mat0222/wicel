@@ -24,11 +24,10 @@ const lightSections = new Set<AdminSection>([
   "combos",
   "marcas",
   "clientes",
-  "proveedores",
+  "mensajes",
   "inventario",
   "promociones",
   "envios",
-  "cupones",
   "canjes",
   "reportes",
   "usuarios",
@@ -370,13 +369,14 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
   };
 
   const remove = async (product: Product) => {
-    if (!window.confirm(`¿Sacar ${product.name} de la tienda? Las ventas que ya tuvo quedan guardadas.`)) return;
+    if (!window.confirm(`¿Sacar ${product.name} de la tienda? Las ventas que ya tuvo quedan guardadas. Si está en algún combo, ese combo también se saca.`)) return;
     const result = await deleteProduct(product.id);
     if (!result.ok) {
       say(result.error, true);
       return;
     }
-    say(`${product.name} ya no se muestra en la tienda.`);
+    const paused = result.data.pausedCombos;
+    say(`${product.name} ya no se muestra en la tienda.${paused > 0 ? ` También sacamos ${paused === 1 ? "1 combo que lo incluía" : `${paused} combos que lo incluían`}: armalo de nuevo en Combos si querés.` : ""}`);
     load();
     onChange();
   };
@@ -919,11 +919,10 @@ function NavIcon({ id }: { id: AdminSection }) {
     combos: "M3 10h18v10H3zM2 7h20v3H2zM12 7v13M12 7c-1.5-3-5-3-5-1s3.5 1 5 1Zm0 0c1.5-3 5-3 5-1s-3.5 1-5 1Z",
     marcas: "M12 3l2.2 4.6L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.6L12 3Z",
     clientes: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM3.5 19c.6-2.5 2.4-4 4.5-4s3.9 1.5 4.5 4M14 15c1.8 0 3.3 1.1 4 3",
-    proveedores: "M3 8h13v10H3zM16 11h3l2 3v4h-5",
+    mensajes: "M4 6h16v11H8l-4 3V6Z",
     inventario: "M4 7l8-3 8 3-8 3-8-3ZM4 7v10l8 3 8-3V7",
     promociones: "M4 12l8-8h6v6l-8 8-6-6Z",
     envios: "M3 16V8h11v8M14 12h4l3 3v1h-7M7 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM17 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z",
-    cupones: "M4 8h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4V8Z",
     canjes: "M4 10h16v10H4zM3 7h18v3H3zM12 7v13M12 7c-1.5-3-5-3-5-1s3.5 1 5 1Zm0 0c1.5-3 5-3 5-1s-3.5 1-5 1Z",
     reportes: "M5 19V10M10 19V5M15 19v-7M20 19V8",
     usuarios: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4 19c.7-2.6 2.6-4 5-4s4.3 1.4 5 4",

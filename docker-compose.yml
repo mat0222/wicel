@@ -9,6 +9,5 @@ services:
       DB_HOST: host.docker.internal
       DB_PORT: "3306"
       DB_NAME: wicel
-      DB_USER: root
     volumes:
       - ./api:/var/www/api

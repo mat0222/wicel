@@ -1,14 +1,54 @@
-export const address = "Obispo Ferreyra 680";
-export const city = "Villa del Rosario, Córdoba";
-export const fullAddress = `${address}, ${city}`;
-export const phone = "3541 21-9547";
-export const phoneHref = "tel:+5493541219547";
-export const email = "accesorioswicel@gmail.com";
-export const instagram = "https://www.instagram.com/wicel_wicel/";
-export const instagramUser = "@wicel_wicel";
-export const mapQuery = encodeURIComponent("Obispo Ferreyra 680, Villa del Rosario, Córdoba, Argentina");
-export const directions = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
-export const whatsapp = (text: string) => `https://wa.me/5493541219547?text=${encodeURIComponent(text)}`;
+import type { StoreSettings } from "./api";
+
+export const storeDefaults = {
+  store_phone: "3541 21-9547",
+  store_email: "accesorioswicel@gmail.com",
+  store_address: "Obispo Ferreyra 680",
+  store_city: "Villa del Rosario, Córdoba",
+  store_instagram: "wicel_wicel",
+};
+
+export let address = storeDefaults.store_address;
+export let city = storeDefaults.store_city;
+export let fullAddress = "";
+export let phone = storeDefaults.store_phone;
+export let phoneHref = "";
+export let email = storeDefaults.store_email;
+export let instagram = "";
+export let instagramUser = "";
+export let mapQuery = "";
+export let directions = "";
+let waNumber = "";
+
+/** Convierte "3541 21-9547" en "5493541219547": formato internacional de un celular argentino. */
+export function internationalNumber(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("54")) digits = digits.slice(2);
+  if (digits.startsWith("9")) digits = digits.slice(1);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  return `549${digits}`;
+}
+
+/** Los datos del local se editan en el panel (Configuración → General). Sin datos guardados quedan los de fábrica. */
+export function applyStoreSettings(settings: StoreSettings | null) {
+  const pick = (key: keyof typeof storeDefaults) => settings?.[key]?.trim() || storeDefaults[key];
+  address = pick("store_address");
+  city = pick("store_city");
+  phone = pick("store_phone");
+  email = pick("store_email");
+  const user = pick("store_instagram").replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "");
+  fullAddress = `${address}, ${city}`;
+  waNumber = internationalNumber(phone);
+  phoneHref = `tel:+${waNumber}`;
+  instagram = `https://www.instagram.com/${user}/`;
+  instagramUser = `@${user}`;
+  mapQuery = encodeURIComponent(`${fullAddress}, Argentina`);
+  directions = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
+}
+
+applyStoreSettings(null);
+
+export const whatsapp = (text: string) => `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 
 type Shift = [open: number, close: number];
 

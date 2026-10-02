@@ -7,16 +7,22 @@ import {
   fetchCatalog,
   fetchSales,
   fetchAdminRewards,
+  fetchMessages,
   fetchSettings,
+  fetchStoreSettings,
   registerImei,
   saveBankSettings,
   saveReward,
+  saveStoreSettings,
+  setMessageStatus,
   setRedemptionStatus,
   setRewardActive,
   setSaleStatus,
   type Account,
   type Brand,
+  type ContactMessage,
   type Order,
+  type StoreForm,
   type Redemption,
   type Reward,
 } from "../lib/api";
@@ -24,62 +30,95 @@ import { shrinkPhoto } from "../lib/shrinkPhoto";
 import { ProductPhoto } from "../components/RealPhoneArt";
 import { useSummary } from "../lib/useSummary";
 import { KpiCards, SalesChart, TopSellers } from "./AdminPages";
-
-type Row = Record<string, string>;
-
-const desks: Record<string, { title: string; crumb: string; columns: string[]; rows: Row[] }> = {
-  proveedores: {
-    title: "Proveedores",
-    crumb: "Panel / Proveedores",
-    columns: ["Proveedor", "Contacto", "Marca", "Estado"],
-    rows: ["Apple", "Samsung", "Motorola", "Xiaomi", "Realme", "TCL"].map((brand) => ({
-      Proveedor: brand,
-      Contacto: "Sin cargar",
-      Marca: brand,
-      Estado: "Activo",
-    })),
-  },
-  cupones: {
-    title: "Puntos y cupones",
-    crumb: "Cómo suma puntos un cliente. Un cupón de descuento se carga con el botón.",
-    columns: ["Orden", "Qué hace el cliente", "Qué gana", "Estado"],
-    rows: [
-      { Orden: "1", "Qué hace el cliente": "Se registra en la tienda", "Qué gana": "Empieza a sumar", Estado: "Activo" },
-      { Orden: "2", "Qué hace el cliente": "Compra", "Qué gana": "Suma por cada $1.000", Estado: "Activo" },
-      { Orden: "3", "Qué hace el cliente": "Junta puntos", "Qué gana": "Llega al premio", Estado: "Activo" },
-      { Orden: "4", "Qué hace el cliente": "Canjea", "Qué gana": "Descuento o accesorio", Estado: "Activo" },
-    ],
-  },
-};
-
-function loadSaved<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as T;
-    return Array.isArray(fallback) && !Array.isArray(parsed) ? fallback : parsed;
-  } catch {
-    return fallback;
-  }
-}
+import { applyStoreSettings, internationalNumber, storeDefaults } from "../lib/store";
 
 export function AdminDesk({ section, onCatalogChange }: { section: AdminSection; onCatalogChange: () => void }) {
   if (section === "reportes") return <Reports />;
   if (section === "usuarios") return <AccountsDesk />;
   if (section === "clientes") return <CustomersDesk />;
+  if (section === "mensajes") return <MessagesDesk />;
   if (section === "configuracion") return <SettingsDesk />;
   if (section === "ventas") return <SalesDesk onCatalogChange={onCatalogChange} />;
   if (section === "envios") return <SalesDesk shipping onCatalogChange={onCatalogChange} />;
   if (section === "marcas") return <BrandsDesk />;
   if (section === "promociones") return <PromosDesk />;
   if (section === "canjes") return <RewardsDesk />;
-  const desk = desks[section];
-  if (!desk) return null;
-  const addLabels: Record<string, string> = {
-    proveedores: "Nuevo proveedor",
-    cupones: "Nuevo cupón",
+  return null;
+}
+
+const messageStatus: Record<ContactMessage["status"], { label: string; tone: string }> = {
+  NEW: { label: "Nuevo", tone: "bg-[#3a2a00] text-[#FFD83D]" },
+  READ: { label: "Leído", tone: "bg-[#10263f] text-[#93c5fd]" },
+  REPLIED: { label: "Respondido", tone: "bg-[#123024] text-[#86efac]" },
+  CLOSED: { label: "Cerrado", tone: "bg-[#3a3a3a] text-[#A7A7A7]" },
+};
+
+const waLink = (phone: string) => `https://wa.me/${internationalNumber(phone)}`;
+
+function MessagesDesk() {
+  const [messages, setMessages] = useState<ContactMessage[] | null>(null);
+  const [error, setError] = useState("");
+  const [openId, setOpenId] = useState<number | null>(null);
+
+  useEffect(() => {
+    void fetchMessages().then((result) => {
+      if (result.ok) setMessages(result.data);
+      else {
+        setMessages([]);
+        setError(result.error);
+      }
+    });
+  }, []);
+
+  const change = async (message: ContactMessage, status: ContactMessage["status"]) => {
+    if (message.status === status) return;
+    setError("");
+    const result = await setMessageStatus(message.id, status);
+    if (!result.ok) return setError(result.error);
+    setMessages((current) => (current ?? []).map((item) => item.id === message.id ? { ...item, status } : item));
   };
-  return <CrudTable key={section} storageKey={`wicel-admin-${section}`} {...desk} addLabel={addLabels[section] ?? "Agregar"} />;
+
+  const open = (message: ContactMessage) => {
+    setOpenId(openId === message.id ? null : message.id);
+    if (message.status === "NEW") void change(message, "READ");
+  };
+
+  const fresh = (messages ?? []).filter((item) => item.status === "NEW").length;
+  const reply = (message: ContactMessage) => `mailto:${message.email}?subject=${encodeURIComponent(`Re: ${message.subject || "tu consulta en wicel"}`)}&body=${encodeURIComponent(`Hola ${message.name.split(" ")[0]}, `)}`;
+
+  return (
+    <Screen title="Mensajes" crumb="Lo que te escriben desde el formulario de Contacto. Respondé por email o WhatsApp y marcalo como Respondido.">
+      {error ? <p role="alert" className="mb-3 rounded-lg bg-[#3a1212] px-3 py-2 text-sm font-medium text-[#fecaca]">{error}</p> : null}
+      {fresh > 0 ? <p className="mb-3 rounded-lg border border-[#FFD83D]/40 bg-[#2b2400] px-3 py-2 text-sm text-[#FFD83D]">Tenés {fresh} {fresh === 1 ? "mensaje nuevo" : "mensajes nuevos"} sin leer.</p> : null}
+      {messages === null ? <p className="py-6 text-center text-sm text-[#d4d4d4]">Cargando mensajes...</p> : null}
+      {messages !== null && messages.length === 0 && !error ? <p className="py-6 text-center text-sm text-[#d4d4d4]">Todavía nadie escribió desde la página de Contacto.</p> : null}
+      <ul className="space-y-2">
+        {(messages ?? []).map((message) => (
+          <li key={message.id} className={`rounded-xl border p-3 ${message.status === "NEW" ? "border-[#FFD83D]/50" : "border-[#4a4a4a]"}`}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <button type="button" aria-expanded={openId === message.id} onClick={() => open(message)} className="min-w-0 flex-1 text-left">
+                <span className="block font-semibold">{message.name} <span className="font-normal text-[#A7A7A7]">· {message.subject || "Sin asunto"}</span></span>
+                <span className="block text-xs text-[#A7A7A7]">{new Date(message.date.replace(" ", "T")).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })} · {message.email}</span>
+                {openId === message.id ? null : <span className="mt-1 block truncate text-sm text-[#d4d4d4]">{message.message}</span>}
+              </button>
+              <select value={message.status} onChange={(event) => void change(message, event.target.value as ContactMessage["status"])} aria-label={`Estado del mensaje de ${message.name}`} className={`h-8 rounded-lg border-0 px-2 text-xs font-semibold ${messageStatus[message.status].tone}`}>
+                {Object.entries(messageStatus).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
+              </select>
+            </div>
+            {openId === message.id ? (
+              <div className="mt-3">
+                <p className="whitespace-pre-wrap text-sm text-[#e5e5e5]">{message.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a href={reply(message)} onClick={() => void change(message, "REPLIED")} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold">Responder por email</a>
+                  {message.phone ? <a href={waLink(message.phone)} target="_blank" rel="noreferrer" onClick={() => void change(message, "REPLIED")} className="rounded-lg bg-[#123024] px-3 py-1.5 text-xs font-semibold text-[#86efac]">WhatsApp {message.phone}</a> : null}
+                </div>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </Screen>
+  );
 }
 
 const statusTone: Record<Order["status"], string> = {
@@ -93,6 +132,8 @@ const statusTone: Record<Order["status"], string> = {
 function SalesDesk({ shipping = false, onCatalogChange }: { shipping?: boolean; onCatalogChange: () => void }) {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
+  const [transitions, setTransitions] = useState<Partial<Record<Order["status"], Order["status"][]>>>({});
+  const [holdHours, setHoldHours] = useState(48);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [filter, setFilter] = useState("");
@@ -115,6 +156,8 @@ function SalesDesk({ shipping = false, onCatalogChange }: { shipping?: boolean; 
       if (result.ok) {
         setOrders(result.data.orders);
         setStatuses(result.data.statuses);
+        setTransitions(result.data.transitions);
+        setHoldHours(result.data.holdHours);
       } else setError(result.error);
     });
   }, []);
@@ -142,7 +185,7 @@ function SalesDesk({ shipping = false, onCatalogChange }: { shipping?: boolean; 
   return (
     <Screen
       title={shipping ? "Envíos" : "Ventas"}
-      crumb={shipping ? "Pedidos para preparar y entregar. Cambiá el estado cuando sale o llega." : "Pedidos hechos en la tienda. Cuando cobres, marcalo como Pagado: ahí el cliente suma sus puntos."}
+      crumb={shipping ? "Pedidos para preparar y entregar. Cambiá el estado cuando sale o llega." : `Pedidos hechos en la tienda. Cuando cobres, marcalo como Pagado: ahí el cliente suma sus puntos. Si en ${holdHours} horas no se marca como pagado, se cancela solo y el stock vuelve.`}
       notice={notice}
       action={(
         <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtrar por estado" className="h-9 rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-2 text-sm text-white">
@@ -190,7 +233,7 @@ function SalesDesk({ shipping = false, onCatalogChange }: { shipping?: boolean; 
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusTone.CANCELLED}`}>Cancelado</span>
                   ) : (
                     <select value={order.status} onChange={(event) => void change(order, event.target.value as Order["status"])} aria-label={`Estado del pedido ${order.number}`} className={`h-8 rounded-lg border-0 px-2 text-xs font-semibold ${statusTone[order.status]}`}>
-                      {Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      {[order.status, ...(transitions[order.status] ?? [])].map((key) => <option key={key} value={key}>{statuses[key] ?? key}</option>)}
                     </select>
                   )}
                 </td>
@@ -499,47 +542,6 @@ function PromosDesk() {
   );
 }
 
-function CrudTable({ title, crumb, columns, rows, addLabel, storageKey }: { title: string; crumb: string; columns: string[]; rows: Row[]; addLabel: string; storageKey: string }) {
-  const [items, setItems] = useState(() => loadSaved(storageKey, rows));
-  const [draft, setDraft] = useState<Row | null>(null);
-  const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(items));
-  }, [items, storageKey]);
-
-  const openNew = () => {
-    setEditIndex(null);
-    setError("");
-    setDraft(Object.fromEntries(columns.map((column) => [column, column === "Estado" ? "Activo" : ""])));
-  };
-
-  const save = () => {
-    if (!draft || columns.some((column) => !draft[column].trim())) {
-      setError("Completá todos los campos. Si falta uno, no se guarda.");
-      return;
-    }
-    setItems((current) => editIndex === null ? [draft, ...current] : current.map((item, index) => index === editIndex ? draft : item));
-    setDraft(null);
-    setError("");
-    setNotice(editIndex === null ? "Listo, quedó cargado." : "Cambios guardados.");
-  };
-
-  return (
-    <Screen title={title} crumb={crumb} notice={notice} action={<button type="button" onClick={openNew} className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold">{addLabel}</button>}>
-      {error ? <p role="alert" className="mb-3 rounded-lg bg-[#3a1212] px-3 py-2 text-sm font-medium text-[#fecaca]">{error}</p> : null}
-      <Table columns={columns} rows={items} onEdit={(index) => { setEditIndex(index); setError(""); setDraft(items[index]); }} onDelete={(index) => {
-        const name = items[index]?.[columns[0]] || "este registro";
-        if (!window.confirm(`¿Eliminar ${name}? No se puede deshacer.`)) return;
-        setItems((current) => current.filter((_, item) => item !== index));
-        setNotice("Eliminado.");
-      }} />
-      {draft ? <Editor columns={columns} draft={draft} onChange={setDraft} onSave={save} onClose={() => { setDraft(null); setError(""); }} /> : null}
-    </Screen>
-  );
-}
-
 function useAccounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [error, setError] = useState("");
@@ -675,43 +677,80 @@ function AccountsDesk() {
 function SettingsDesk() {
   const [tab, setTab] = useState("General");
   const [saved, setSaved] = useState("");
-  const [store, setStore] = useState(() => loadSaved("wicel-admin-settings", {
-    name: "wicel",
-    description: "Tu mundo en un solo lugar",
-    phone: "3541 21-9547",
-    email: "accesorioswicel@gmail.com",
-    sales: "accesorioswicel@gmail.com",
-    address: "Obispo Ferreyra 680, Villa del Rosario, Córdoba",
-  }));
+  const [perThousand, setPerThousand] = useState<number | null>(null);
   const tabs = ["General", "Pagos", "Envíos", "Puntos"];
-  const update = (key: keyof typeof store, value: string) => setStore((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    void fetchSettings().then((settings) => setPerThousand(Number(settings?.points_per_currency ?? 1) || 1));
+  }, []);
 
   return (
     <Screen title="Configuración" crumb="Datos que ve el cliente en la tienda" notice={saved}>
       <div className="flex flex-wrap gap-2 text-sm">
         {tabs.map((item) => (
-          <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-lg px-3 py-1.5 ${tab === item ? "bg-[#3a2a00] font-semibold text-[#FFD83D]" : "text-[#d4d4d4]"}`}>{item}</button>
+          <button key={item} type="button" onClick={() => { setTab(item); setSaved(""); }} className={`rounded-lg px-3 py-1.5 ${tab === item ? "bg-[#3a2a00] font-semibold text-[#FFD83D]" : "text-[#d4d4d4]"}`}>{item}</button>
         ))}
       </div>
-      {tab === "General" ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Field label="Nombre de la tienda" value={store.name} onChange={(value) => update("name", value)} />
-          <Field label="Frase de la tienda" value={store.description} onChange={(value) => update("description", value)} />
-          <Field label="Teléfono del local" value={store.phone} onChange={(value) => update("phone", value)} />
-          <Field label="Email de contacto" value={store.email} onChange={(value) => update("email", value)} />
-          <Field label="Email de ventas" value={store.sales} onChange={(value) => update("sales", value)} />
-          <Field label="Dirección del local" value={store.address} onChange={(value) => update("address", value)} />
-        </div>
-      ) : null}
+      {tab === "General" ? <StoreFormDesk onSaved={setSaved} /> : null}
       {tab === "Pagos" ? <BankForm onSaved={setSaved} /> : null}
-      {tab === "Envíos" ? <p className="mt-4 text-sm text-[#d4d4d4]">Los pedidos salen desde Villa del Rosario, Córdoba. El estado de cada envío se mira en Envíos.</p> : null}
-      {tab === "Puntos" ? <p className="mt-4 text-sm text-[#d4d4d4]">Cada $1.000 de compra suma 1 punto. Se acreditan cuando marcás el pedido como Pagado en Ventas.</p> : null}
-      {tab === "General" ? (
-        <div className="mt-4 flex justify-end">
-          <button type="button" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold" onClick={() => { localStorage.setItem("wicel-admin-settings", JSON.stringify(store)); setSaved("Quedó guardado en este navegador."); }}>Guardar cambios</button>
-        </div>
+      {tab === "Envíos" ? <p className="mt-4 text-sm text-[#d4d4d4]">Los pedidos salen desde el local. La dirección se cambia en General y el estado de cada envío se mira en Envíos.</p> : null}
+      {tab === "Puntos" ? (
+        <p className="mt-4 text-sm text-[#d4d4d4]">
+          {perThousand === null ? "Cargando..." : `Cada $1.000 de compra suma ${perThousand} ${perThousand === 1 ? "punto" : "puntos"}. Se acreditan cuando marcás el pedido como Pagado en Ventas. Los premios se cargan en Canjes.`}
+        </p>
       ) : null}
     </Screen>
+  );
+}
+
+function StoreFormDesk({ onSaved }: { onSaved: (text: string) => void }) {
+  const [store, setStore] = useState<StoreForm | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void fetchStoreSettings().then((result) => {
+      if (!result.ok) return setError(result.error);
+      const filled = { ...result.data };
+      for (const key of Object.keys(storeDefaults) as (keyof typeof storeDefaults)[]) filled[key] ||= storeDefaults[key];
+      filled.store_name ||= "wicel";
+      filled.order_hold_hours ||= "48";
+      setStore(filled);
+    });
+  }, []);
+
+  if (!store) return error ? <p role="alert" className="mt-4 rounded-lg bg-[#3a1212] px-3 py-2 text-sm text-[#fecaca]">{error}</p> : <p className="mt-4 text-sm text-[#A7A7A7]">Cargando...</p>;
+  const update = (key: keyof StoreForm, value: string) => setStore({ ...store, [key]: value });
+
+  return (
+    <form className="mt-4" onSubmit={(event) => {
+      event.preventDefault();
+      setError("");
+      onSaved("");
+      setBusy(true);
+      void saveStoreSettings(store).then((result) => {
+        setBusy(false);
+        if (!result.ok) return setError(result.error);
+        applyStoreSettings(store);
+        onSaved("Guardado. La tienda ya muestra los datos nuevos.");
+      });
+    }}>
+      <p className="text-sm text-[#d4d4d4]">Se ven en el pie de página, en Contacto, en el botón de WhatsApp y en los emails de pedido.</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <Field label="Nombre de la tienda" value={store.store_name} onChange={(value) => update("store_name", value)} />
+        <Field label="Teléfono y WhatsApp del local" value={store.store_phone} onChange={(value) => update("store_phone", value)} hint="Con código de área, sin 0 ni 15. Ej.: 3541 21-9547" />
+        <Field label="Email de contacto" value={store.store_email} onChange={(value) => update("store_email", value)} hint="El que ven los clientes." />
+        <Field label="Email para avisos de pedidos y mensajes" value={store.notify_email} onChange={(value) => update("notify_email", value)} hint="Si lo dejás vacío, usamos el email de contacto." />
+        <Field label="Dirección del local" value={store.store_address} onChange={(value) => update("store_address", value)} hint="Calle y número. Ej.: Obispo Ferreyra 680" />
+        <Field label="Ciudad y provincia" value={store.store_city} onChange={(value) => update("store_city", value)} hint="Ej.: Villa del Rosario, Córdoba" />
+        <Field label="Instagram" value={store.store_instagram} onChange={(value) => update("store_instagram", value)} hint="El usuario, con o sin @." />
+        <Field label="Horas para pagar un pedido" value={store.order_hold_hours} onChange={(value) => update("order_hold_hours", value)} hint="Pasado ese plazo sin marcarlo como Pagado, se cancela solo y el stock vuelve. Vacío = 48." />
+      </div>
+      {error ? <p role="alert" className="mt-3 rounded-lg bg-[#3a1212] px-3 py-2 text-sm font-medium text-[#fecaca]">{error}</p> : null}
+      <div className="mt-4 flex justify-end">
+        <button disabled={busy} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold disabled:opacity-60">{busy ? "Guardando..." : "Guardar cambios"}</button>
+      </div>
+    </form>
   );
 }
 
@@ -787,48 +826,13 @@ export function Screen({ title, crumb, notice, action, children }: { title: stri
   );
 }
 
-function Table({ columns, rows, onEdit, onDelete }: { columns: string[]; rows: Row[]; onEdit: (index: number) => void; onDelete: (index: number) => void }) {
+function Field({ label, value, onChange, hint }: { label: string; value: string; onChange: (value: string) => void; hint?: string }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="admin-table w-full min-w-[640px] text-left text-sm">
-        <thead className="text-xs text-[#A7A7A7]"><tr>{columns.map((column) => <th key={column} className="py-2 font-medium">{column}</th>)}<th className="font-medium">Acciones</th></tr></thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={`${row[columns[0]]}-${index}`} className="border-t border-[#4a4a4a]">
-              {columns.map((column) => <td key={column} className="py-3">{column === "Estado" ? <Status value={row[column]} /> : row[column]}</td>)}
-              <td><span className="flex gap-1.5"><IconButton label="Editar" onClick={() => onEdit(index)} /> <IconButton label="Eliminar" danger onClick={() => onDelete(index)} /></span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-          {rows.length === 0 ? <p className="py-6 text-center text-sm text-[#d4d4d4]">Todavía no hay nada cargado.</p> : null}
-    </div>
+    <label className="block text-xs font-semibold text-[#d4d4d4]">{label}
+      <input value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-3 text-sm text-white" />
+      {hint ? <span className="mt-1 block text-[11px] font-normal text-[#A7A7A7]">{hint}</span> : null}
+    </label>
   );
-}
-
-function Editor({ columns, draft, onChange, onSave, onClose }: { columns: string[]; draft: Row; onChange: (row: Row) => void; onSave: () => void; onClose: () => void }) {
-  return (
-    <form className="mt-4 grid gap-3 rounded-xl border border-[#4a4a4a] bg-[#242424] p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-      {columns.map((column) => (
-        <label key={column} className="text-xs font-semibold text-[#d4d4d4]">{column}
-          <input value={draft[column]} onChange={(event) => onChange({ ...draft, [column]: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-3 text-sm text-white placeholder:text-[#A7A7A7]" />
-        </label>
-      ))}
-      <div className="flex items-end gap-2">
-        <button className="h-10 rounded-lg bg-brand px-4 text-sm font-semibold">Guardar</button>
-        <button type="button" onClick={onClose} className="h-10 rounded-lg border border-[#4a4a4a] px-4 text-sm text-white">Cancelar</button>
-      </div>
-    </form>
-  );
-}
-
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="block text-xs font-semibold text-[#d4d4d4]">{label}<input value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-3 text-sm text-white" /></label>;
-}
-
-function Status({ value }: { value: string }) {
-  const attention = value === "Bajo" || value === "Pendiente" || value === "En camino";
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${attention ? "bg-[#3a2a00] text-[#FFD83D]" : "bg-[#123024] text-[#86efac]"}`}>{value}</span>;
 }
 
 function IconButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {

@@ -24,6 +24,42 @@ final class Orders
 
     private const EARNING = ['PAID', 'SHIPPED', 'DELIVERED'];
 
+    /** A qué estado puede pasar cada uno. Pendiente → Entregado es el que paga en efectivo al retirar. */
+    public const TRANSITIONS = [
+        'PENDING' => ['PAID', 'DELIVERED', 'CANCELLED'],
+        'PAID' => ['SHIPPED', 'DELIVERED', 'CANCELLED'],
+        'SHIPPED' => ['DELIVERED', 'CANCELLED'],
+        'DELIVERED' => ['CANCELLED'],
+        'CANCELLED' => [],
+    ];
+
+    public const MAX_PER_ITEM = 5;
+    /** Pedidos sin pagar que puede tener abiertos a la vez una misma IP o un mismo email. */
+    private const MAX_OPEN = 3;
+    public const DEFAULT_HOLD_HOURS = 48;
+
+    /** Horas que se guarda la mercadería de un pedido sin pagar antes de cancelarlo solo. */
+    public static function holdHours(PDO $pdo): int
+    {
+        $hours = (int) Legal::setting($pdo, 'order_hold_hours');
+
+        return $hours >= 1 && $hours <= 168 ? $hours : self::DEFAULT_HOLD_HOURS;
+    }
+
+    /** Cancela los pedidos web que siguen sin pagar después del plazo y devuelve su stock. */
+    public static function expireStale(PDO $pdo): void
+    {
+        $hours = self::holdHours($pdo);
+        $stmt = $pdo->prepare(
+            "SELECT id FROM sales WHERE status = 'PENDING' AND sale_channel = 'WEBSITE'
+             AND sold_at < NOW() - INTERVAL ? HOUR ORDER BY id LIMIT 20"
+        );
+        $stmt->execute([$hours]);
+        foreach (array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)) as $saleId) {
+            self::setStatus($pdo, $saleId, 'CANCELLED', null, "Cancelado solo: no se registró el pago en {$hours} horas");
+        }
+    }
+
     public static function pointsFor(PDO $pdo, int $total): int
     {
         $rate = (int) $pdo->query("SELECT setting_value FROM site_settings WHERE setting_key = 'points_per_currency'")->fetchColumn();
@@ -100,10 +136,22 @@ final class Orders
         foreach ($items as $item) {
             $variant = (int) ($item['variantId'] ?? 0);
             $qty = (int) ($item['qty'] ?? 0);
-            if ($variant <= 0 || $qty < 1 || $qty > 10) {
+            if ($variant <= 0 || $qty < 1) {
                 return 'Revisá las cantidades del carrito.';
             }
             $wanted[$variant] = ($wanted[$variant] ?? 0) + $qty;
+            if ($wanted[$variant] > self::MAX_PER_ITEM) {
+                return 'Por la web se pueden pedir hasta ' . self::MAX_PER_ITEM . ' unidades de cada producto. Para más, escribinos por WhatsApp.';
+            }
+        }
+
+        $open = $pdo->prepare(
+            "SELECT COUNT(*) FROM sales WHERE status = 'PENDING' AND sale_channel = 'WEBSITE'
+             AND (accepted_ip = ? OR LOWER(customer_email_snapshot) = ?)"
+        );
+        $open->execute([Legal::ip(), $email]);
+        if ((int) $open->fetchColumn() >= self::MAX_OPEN) {
+            return 'Ya tenés ' . self::MAX_OPEN . ' pedidos esperando el pago. Pagá o cancelá alguno antes de hacer otro, o escribinos por WhatsApp.';
         }
 
         $warehouse = Catalog::warehouse($pdo);
@@ -129,9 +177,20 @@ final class Orders
                 $lines[] = ['variant' => $variantId, 'sku' => $row['sku'], 'name' => $label, 'qty' => $qty, 'price' => (int) round((float) $row['sale_price'])];
 
                 if ($row['product_type'] === 'COMBO') {
-                    $parts = $pdo->prepare('SELECT variant_id, quantity FROM product_combo_items WHERE combo_product_id = (SELECT product_id FROM product_variants WHERE id = ?)');
+                    $parts = $pdo->prepare(
+                        'SELECT ci.variant_id, ci.quantity, (cv.is_active = 1 AND cp.is_active = 1) AS available
+                         FROM product_combo_items ci
+                         INNER JOIN product_variants cv ON cv.id = ci.variant_id
+                         INNER JOIN products cp ON cp.id = cv.product_id
+                         WHERE ci.combo_product_id = (SELECT product_id FROM product_variants WHERE id = ?)'
+                    );
                     $parts->execute([$variantId]);
-                    foreach ($parts->fetchAll() as $part) {
+                    $parts = $parts->fetchAll();
+                    if ($parts === [] || in_array(0, array_map(static fn ($part) => (int) $part['available'], $parts), true)) {
+                        $pdo->rollBack();
+                        return "El combo {$label} ya no está a la venta. Sacalo del carrito y probá de nuevo.";
+                    }
+                    foreach ($parts as $part) {
                         $needs[(int) $part['variant_id']] = ['qty' => ($needs[(int) $part['variant_id']]['qty'] ?? 0) + $qty * (int) $part['quantity'], 'name' => $label];
                     }
                 } else {
@@ -239,7 +298,7 @@ final class Orders
             throw $error;
         }
 
-        return [
+        $order = [
             'number' => $number,
             'total' => $total,
             'payment' => $payment,
@@ -253,7 +312,70 @@ final class Orders
             'address' => $address,
             'delivery' => $delivery,
             'cftea' => $payment === 'tarjeta-12' ? $financing['cftea'] : null,
+            'holdHours' => self::holdHours($pdo),
         ];
+        self::notifyNew($pdo, $order, "$first $last", $lines);
+
+        return $order;
+    }
+
+    /** @param list<array{name: string, qty: int, price: int}> $lines */
+    private static function notifyNew(PDO $pdo, array $order, string $customer, array $lines): void
+    {
+        $items = implode("\n", array_map(static fn ($line) => "- {$line['qty']} x {$line['name']}: " . Mailer::money($line['price'] * $line['qty']), $lines));
+        $delivery = $order['delivery'] === 'PICKUP' ? 'Retira en el local' : "Envío a {$order['address']} (costo a coordinar)";
+        $total = Mailer::money($order['total']);
+        $hours = $order['holdHours'];
+        $store = Legal::setting($pdo, 'store_name') ?: 'wicel';
+
+        $owner = Mailer::owner($pdo);
+        if ($owner !== '') {
+            $panel = Mailer::siteUrl('/admin');
+            Mailer::send($owner, "Nuevo pedido {$order['number']} por {$total}", implode("\n", array_filter([
+                "Entró un pedido por la web.",
+                '',
+                "Pedido: {$order['number']}",
+                "Cliente: {$customer}",
+                "Email: {$order['email']}",
+                "WhatsApp: {$order['phone']}",
+                "Pago: {$order['paymentLabel']}",
+                "Entrega: {$delivery}",
+                "Total: {$total}",
+                '',
+                $items,
+                '',
+                "Si no lo marcás como Pagado en {$hours} horas, se cancela solo y el stock vuelve a la tienda.",
+                $panel !== '' ? "Panel: {$panel}" : null,
+            ], static fn ($line) => $line !== null)), $order['email']);
+        }
+
+        $bank = array_filter([
+            Legal::setting($pdo, 'bank_alias') !== '' ? 'Alias: ' . Legal::setting($pdo, 'bank_alias') : null,
+            Legal::setting($pdo, 'bank_cbu') !== '' ? 'CBU/CVU: ' . Legal::setting($pdo, 'bank_cbu') : null,
+            Legal::setting($pdo, 'bank_holder') !== '' ? 'Titular: ' . Legal::setting($pdo, 'bank_holder') : null,
+        ]);
+        $howToPay = match ($order['payment']) {
+            'transferencia' => $bank === []
+                ? "Te pasamos los datos para transferir por WhatsApp. Cuando transfieras, mandanos el comprobante con tu número de pedido."
+                : "Datos para transferir {$total}:\n" . implode("\n", $bank) . "\nCuando transfieras, mandanos el comprobante por WhatsApp con tu número de pedido.",
+            'efectivo' => "Pagás en efectivo al retirar en el local.",
+            default => "Te escribimos por WhatsApp para coordinar el pago con tarjeta.",
+        };
+        $lookup = Mailer::siteUrl('/mi-pedido');
+        Mailer::send($order['email'], "Recibimos tu pedido {$order['number']}", implode("\n", array_filter([
+            "Hola {$order['name']}, gracias por tu compra en {$store}.",
+            '',
+            "Pedido: {$order['number']}",
+            "Total: {$total} ({$order['paymentLabel']})",
+            "Entrega: {$delivery}",
+            '',
+            $items,
+            '',
+            $howToPay,
+            "Te guardamos los productos {$hours} horas. Si para entonces no registramos el pago, el pedido se cancela solo.",
+            '',
+            $lookup !== '' ? "Seguí tu pedido en {$lookup} con tu número de pedido y este email." : null,
+        ], static fn ($line) => $line !== null)), $owner !== '' ? $owner : null);
     }
 
     public static function forUser(PDO $pdo, int $userId): array
@@ -355,8 +477,8 @@ final class Orders
         }, $sales->fetchAll());
     }
 
-    /** Cambia el estado. Suma puntos al pagarse y devuelve stock y puntos si se cancela. */
-    public static function setStatus(PDO $pdo, int $saleId, string $status, int $userId): ?string
+    /** Cambia el estado. Suma puntos al pagarse y devuelve stock y puntos si se cancela. $userId null: lo hizo el sistema. */
+    public static function setStatus(PDO $pdo, int $saleId, string $status, ?int $userId, ?string $detail = null): ?string
     {
         if (!isset(self::STATUSES[$status])) {
             return 'Ese estado no existe.';
@@ -379,6 +501,10 @@ final class Orders
             if ($sale['status'] === $status) {
                 $pdo->rollBack();
                 return null;
+            }
+            if (!in_array($status, self::TRANSITIONS[$sale['status']] ?? [], true)) {
+                $pdo->rollBack();
+                return 'El pedido no puede pasar de "' . (self::STATUSES[$sale['status']] ?? $sale['status']) . '" a "' . self::STATUSES[$status] . '".';
             }
 
             $account = null;
@@ -433,7 +559,7 @@ final class Orders
             }
 
             $pdo->prepare('UPDATE sales SET status = ?, user_id = ? WHERE id = ?')->execute([$status, $userId, $saleId]);
-            Legal::event($pdo, $saleId, 'STATUS_' . $status, 'Estado: ' . self::STATUSES[$status], $userId);
+            Legal::event($pdo, $saleId, 'STATUS_' . $status, $detail ?? 'Estado: ' . self::STATUSES[$status], $userId);
             $pdo->commit();
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) {

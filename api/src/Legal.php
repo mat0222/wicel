@@ -60,9 +60,9 @@ final class Legal
 
     public static function ip(): ?string
     {
-        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $ip = Security::ip();
 
-        return $ip === '' ? null : substr($ip, 0, 45);
+        return $ip === 'sin-ip' ? null : substr($ip, 0, 45);
     }
 
     public static function event(PDO $pdo, int $saleId, string $type, string $detail, ?int $userId = null): void

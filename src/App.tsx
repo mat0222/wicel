@@ -1,10 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { SiteFooter } from "./components/SiteFooter";
 import { fetchCatalog, fetchSession, fetchSettings, logout, type Account, type StoreSettings } from "./lib/api";
 import { AccountDialog, InfoDialog, ProductDialog } from "./components/ShopDialogs";
 import { StoreHeader } from "./components/StoreHeader";
-import { setFinancing, type AdminSection, type CartItem, type Product, type View } from "./data";
-import { whatsapp } from "./lib/store";
+import { MAX_PER_ITEM, setFinancing, type AdminSection, type CartItem, type Product, type View } from "./data";
+import { applyStoreSettings, whatsapp } from "./lib/store";
 import { CatalogPage } from "./pages/CatalogPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage, type LoginMode } from "./pages/LoginPage";
@@ -33,12 +33,20 @@ const paths: Record<View, string> = {
   pedido: "/mi-pedido",
 };
 
+const productPath = /^\/productos\/([a-z0-9-]+)$/;
+const currentPath = () => window.location.pathname.slice(base.length).replace(/\/+$/, "") || "/";
+
 function viewFromLocation(): View {
   const hash = window.location.hash.replace(/^#\/?/, "").replace(/\/+$/, "");
   const fromHash = Object.entries(paths).find(([, path]) => hash && path === `/${hash}`);
   if (fromHash) return fromHash[0] as View;
-  const path = window.location.pathname.slice(base.length).replace(/\/+$/, "") || "/";
+  const path = currentPath();
+  if (productPath.test(path)) return "productos";
   return (Object.entries(paths).find(([, value]) => value === path)?.[0] as View | undefined) ?? "home";
+}
+
+function slugFromLocation(): string | null {
+  return productPath.exec(currentPath())?.[1] ?? null;
 }
 
 function savedCart(): CartItem[] {
@@ -58,7 +66,8 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [brand, setBrand] = useState("");
   const [promos, setPromos] = useState(false);
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<string | null>(slugFromLocation);
+  const pushedProduct = useRef(false);
   const [info, setInfo] = useState<"puntos" | "cuotas" | null>(null);
   const [notice, setNotice] = useState("");
   const [account, setAccount] = useState(false);
@@ -72,6 +81,8 @@ export default function App() {
 
   const navigate = useCallback((next: View) => {
     setView(next);
+    setActive(null);
+    pushedProduct.current = false;
     const target = base + paths[next];
     if (window.location.pathname !== target || window.location.hash) window.history.pushState(null, "", target);
     window.scrollTo(0, 0);
@@ -93,13 +104,17 @@ export default function App() {
     });
     void fetchSettings().then((found) => {
       setFinancing(found);
+      applyStoreSettings(found);
       setSettings(found);
-      if (found?.store_name) document.title = found.store_name;
     });
   }, []);
 
   useEffect(() => {
-    const onPop = () => setView(viewFromLocation());
+    const onPop = () => {
+      pushedProduct.current = false;
+      setView(viewFromLocation());
+      setActive(slugFromLocation());
+    };
     window.addEventListener("popstate", onPop);
     window.addEventListener("hashchange", onPop);
     return () => {
@@ -117,6 +132,34 @@ export default function App() {
   }, [cart]);
 
   const product = products?.find((item) => item.slug === active) ?? null;
+  const storeName = settings?.store_name || "wicel";
+
+  useEffect(() => {
+    document.title = product ? `${product.name} | ${storeName}` : storeName;
+  }, [product, storeName]);
+
+  const openProduct = (slug: string) => {
+    setActive(slug);
+    const target = `${base}/productos/${slug}`;
+    if (window.location.pathname === target) return;
+    if (slugFromLocation()) window.history.replaceState(null, "", target);
+    else {
+      window.history.pushState(null, "", target);
+      pushedProduct.current = true;
+    }
+  };
+
+  const closeProduct = () => {
+    if (!slugFromLocation()) return setActive(null);
+    if (pushedProduct.current) {
+      pushedProduct.current = false;
+      window.history.back();
+      return;
+    }
+    setActive(null);
+    window.history.replaceState(null, "", base + paths[view]);
+  };
+
   const count = cart.reduce((total, item) => total + item.qty, 0);
   const inCart = (variantId: number) => cart.find((item) => item.variantId === variantId)?.qty ?? 0;
   const stockOf = (variantId: number) => products?.flatMap((item) => item.colors).find((color) => color.variantId === variantId)?.stock ?? 0;
@@ -127,9 +170,9 @@ export default function App() {
   };
 
   const addToCart = (variantId: number, qty: number) => {
-    const room = stockOf(variantId) - inCart(variantId);
+    const room = Math.min(stockOf(variantId), MAX_PER_ITEM) - inCart(variantId);
     if (room <= 0) {
-      notify("No queda más stock de ese producto.");
+      notify(inCart(variantId) >= MAX_PER_ITEM ? `Por pedido se pueden llevar hasta ${MAX_PER_ITEM} unidades de cada producto. Para más, escribinos.` : "No queda más stock de ese producto.");
       return;
     }
     const amount = Math.min(qty, room);
@@ -138,8 +181,8 @@ export default function App() {
       if (!found) return [...current, { variantId, qty: amount }];
       return current.map((item) => item.variantId === variantId ? { ...item, qty: item.qty + amount } : item);
     });
-    setActive(null);
-    notify(amount < qty ? `Agregamos ${amount}: es todo el stock que queda.` : "Agregado al carrito.");
+    closeProduct();
+    notify(amount < qty ? `Agregamos ${amount}: ${stockOf(variantId) > MAX_PER_ITEM ? `el máximo por pedido es ${MAX_PER_ITEM}` : "es todo el stock que queda"}.` : "Agregado al carrito.");
   };
 
   const toggleFavorite = (slug: string) => {
@@ -197,7 +240,7 @@ export default function App() {
           onNavigate={navigate}
           onBrand={(value) => { setBrand(value); setPromos(false); navigate("productos"); }}
           onPromos={() => { setBrand(""); setPromos(true); navigate("productos"); }}
-          onOpen={setActive}
+          onOpen={openProduct}
           onInfo={setInfo}
           favorites={favorites}
           onFavorite={toggleFavorite}
@@ -213,7 +256,7 @@ export default function App() {
           promos={promos}
           favorites={favorites}
           onNavigate={navigate}
-          onOpen={setActive}
+          onOpen={openProduct}
           onFavorite={toggleFavorite}
           onReset={() => { setBrand(""); setPromos(false); }}
           onRetry={loadCatalog}
@@ -233,7 +276,7 @@ export default function App() {
           settings={settings}
           onNavigate={navigate}
           onLogin={() => openLogin("ingresar", "carrito")}
-          onQty={(variantId, qty) => setCart((current) => current.map((item) => item.variantId === variantId ? { ...item, qty: Math.min(qty, Math.max(1, stockOf(variantId))) } : item))}
+          onQty={(variantId, qty) => setCart((current) => current.map((item) => item.variantId === variantId ? { ...item, qty: Math.min(qty, MAX_PER_ITEM, Math.max(1, stockOf(variantId))) } : item))}
           onRemove={(variantId) => setCart((current) => current.filter((item) => item.variantId !== variantId))}
           onOrdered={() => { setCart([]); loadCatalog(); refreshUser(); }}
         />
@@ -247,18 +290,18 @@ export default function App() {
           onPanel={() => { setAccount(false); setAdminSection("inicio"); navigate("admin"); }}
           onLogout={signOut}
           favorites={favorites}
-          onOpen={(slug) => { setAccount(false); setActive(slug); }}
+          onOpen={(slug) => { setAccount(false); openProduct(slug); }}
           onCart={() => { setAccount(false); navigate("carrito"); }}
           onClose={() => setAccount(false)}
         />
       ) : null}
-      {product ? <ProductDialog key={product.slug} product={product} settings={settings} inCart={inCart} favorite={favorites.includes(product.slug)} onFavorite={() => toggleFavorite(product.slug)} onAdd={addToCart} onClose={() => setActive(null)} /> : null}
+      {product ? <ProductDialog key={product.slug} product={product} settings={settings} inCart={inCart} favorite={favorites.includes(product.slug)} onFavorite={() => toggleFavorite(product.slug)} onAdd={addToCart} onClose={closeProduct} /> : null}
       {info ? <InfoDialog kind={info} example={products?.find((item) => item.featured && item.type === "PRODUCT")} onClose={() => setInfo(null)} onProducts={() => { setInfo(null); setPromos(false); navigate("productos"); }} /> : null}
       {notice ? <p role="status" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white shadow-lg">{notice}</p> : null}
-      <a href={whatsapp("Hola wicel, quiero consultar por un producto.")} target="_blank" rel="noreferrer" aria-label="Escribinos por WhatsApp" className="fixed bottom-5 right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#1a9e4b] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(0_0_0/18%)] hover:bg-[#15853f]">
+      {view === "carrito" ? null : <a href={whatsapp(product ? `Hola wicel, quiero consultar por ${product.name}.` : "Hola wicel, quiero consultar por un producto.")} target="_blank" rel="noreferrer" aria-label="Escribinos por WhatsApp" className="fixed bottom-5 right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#1a9e4b] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(0_0_0/18%)] hover:bg-[#15853f]">
         <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true"><path d="M12.04 2C6.58 2 2.15 6.4 2.15 11.83c0 1.74.46 3.44 1.34 4.94L2 22l5.39-1.4a10 10 0 0 0 4.65 1.18h.01c5.46 0 9.89-4.4 9.89-9.83C21.94 6.4 17.5 2 12.04 2Zm5.76 14.16c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.81-.11-.41-.14-.95-.31-1.64-.61-2.88-1.24-4.76-4.14-4.9-4.33-.14-.19-1.16-1.54-1.16-2.94s.73-2.08 1-2.37c.24-.27.64-.39 1.02-.39.12 0 .23 0 .33.01.3.01.44.03.64.49.24.58.82 2 .89 2.15.07.14.12.32.02.51-.1.19-.14.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.12.56.17.27.74 1.22 1.59 1.98 1.09.97 2.01 1.27 2.3 1.41.29.14.46.12.63-.07.17-.19.73-.85.92-1.14.2-.29.39-.24.64-.14.26.1 1.64.77 1.92.91.29.15.48.22.55.34.07.12.07.7-.17 1.38Z" /></svg>
         WhatsApp
-      </a>
+      </a>}
     </div>
   );
 }

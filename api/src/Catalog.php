@@ -50,7 +50,7 @@ final class Catalog
         $products = [];
         foreach ($rows as $row) {
             $list = $byProduct[(int) $row['id']] ?? [];
-            if ($list === []) {
+            if ($list === [] || ($row['product_type'] === 'COMBO' && !isset($components[(int) $row['id']]))) {
                 continue;
             }
             $products[] = self::shape($row, $list, $components[(int) $row['id']] ?? [], $byVariant);
@@ -63,14 +63,23 @@ final class Catalog
     private static function comboComponents(PDO $pdo): array
     {
         $rows = $pdo->query(
-            'SELECT ci.combo_product_id, ci.variant_id, ci.quantity
+            'SELECT ci.combo_product_id, ci.variant_id, ci.quantity, (v.is_active = 1 AND p.is_active = 1) AS available
              FROM product_combo_items ci
-             INNER JOIN product_variants v ON v.id = ci.variant_id AND v.is_active = 1
-             INNER JOIN products p ON p.id = v.product_id AND p.is_active = 1
+             INNER JOIN product_variants v ON v.id = ci.variant_id
+             INNER JOIN products p ON p.id = v.product_id
              ORDER BY ci.combo_product_id, ci.variant_id'
         )->fetchAll();
+        $broken = [];
+        foreach ($rows as $row) {
+            if (!(int) $row['available']) {
+                $broken[(int) $row['combo_product_id']] = true;
+            }
+        }
         $components = [];
         foreach ($rows as $row) {
+            if (isset($broken[(int) $row['combo_product_id']])) {
+                continue;
+            }
             $components[(int) $row['combo_product_id']][] = [
                 'variantId' => (int) $row['variant_id'],
                 'quantity' => max(1, (int) $row['quantity']),
@@ -206,9 +215,34 @@ final class Catalog
         return true;
     }
 
-    public static function deleteProduct(PDO $pdo, int $id): void
+    /** Saca el producto de la tienda. Devuelve los combos que se pausaron por usarlo, o null si no existe. */
+    public static function deleteProduct(PDO $pdo, int $id): ?int
     {
-        $pdo->prepare('UPDATE products SET is_active = 0 WHERE id = ?')->execute([$id]);
+        $stmt = $pdo->prepare('UPDATE products SET is_active = 0 WHERE id = ? AND is_active = 1');
+        $stmt->execute([$id]);
+        if ($stmt->rowCount() === 0) {
+            return null;
+        }
+
+        return self::pauseCombosUsing($pdo, 'v.product_id = ?', [$id]);
+    }
+
+    /** Un combo no se puede vender si le falta un componente: se oculta hasta que el dueño lo arme de nuevo. */
+    private static function pauseCombosUsing(PDO $pdo, string $where, array $params): int
+    {
+        $stmt = $pdo->prepare(
+            "UPDATE products p SET p.is_active = 0
+             WHERE p.product_type = 'COMBO' AND p.is_active = 1 AND p.id IN (
+                 SELECT combo_product_id FROM (
+                     SELECT ci.combo_product_id FROM product_combo_items ci
+                     INNER JOIN product_variants v ON v.id = ci.variant_id
+                     WHERE {$where}
+                 ) AS used
+             )"
+        );
+        $stmt->execute($params);
+
+        return $stmt->rowCount();
     }
 
     /**
@@ -335,6 +369,7 @@ final class Catalog
 
             foreach (array_diff($current, $kept) as $gone) {
                 $pdo->prepare('UPDATE product_variants SET is_active = 0 WHERE id = ?')->execute([$gone]);
+                self::pauseCombosUsing($pdo, 'v.id = ?', [$gone]);
             }
 
             $pdo->commit();

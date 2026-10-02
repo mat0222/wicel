@@ -23,11 +23,10 @@ export type AdminSection =
   | "combos"
   | "marcas"
   | "clientes"
-  | "proveedores"
+  | "mensajes"
   | "inventario"
   | "promociones"
   | "envios"
-  | "cupones"
   | "canjes"
   | "reportes"
   | "usuarios"
@@ -68,6 +67,8 @@ export type CartItem = { variantId: number; qty: number };
 export const CASH_OFF = 0.1;
 export const INSTALLMENTS = 12;
 export const LOW_STOCK = 5;
+/** Igual que Orders::MAX_PER_ITEM en la API. */
+export const MAX_PER_ITEM = 5;
 
 /** Se completa con la configuración del panel: sin CFTEA cargado no se ofrecen cuotas. */
 export const financing = { on: false, rate: 0, cftea: "" };
@@ -141,10 +142,9 @@ export const adminNav: { id: AdminSection; label: string }[] = [
   { id: "combos", label: "Combos" },
   { id: "marcas", label: "Marcas" },
   { id: "clientes", label: "Clientes" },
-  { id: "proveedores", label: "Proveedores" },
+  { id: "mensajes", label: "Mensajes" },
   { id: "promociones", label: "Promociones" },
   { id: "envios", label: "Envíos" },
-  { id: "cupones", label: "Puntos y cupones" },
   { id: "canjes", label: "Canjes" },
   { id: "reportes", label: "Reportes" },
   { id: "usuarios", label: "Usuarios" },

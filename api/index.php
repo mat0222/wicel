@@ -9,6 +9,29 @@ require __DIR__ . '/src/Orders.php';
 require __DIR__ . '/src/Rewards.php';
 require __DIR__ . '/src/Legal.php';
 require __DIR__ . '/src/Security.php';
+require __DIR__ . '/src/Mailer.php';
+
+/** Ajustes que se editan desde el panel y su largo máximo. */
+const STORE_SETTINGS = [
+    'store_name' => 80,
+    'store_phone' => 30,
+    'store_email' => 150,
+    'store_address' => 150,
+    'store_city' => 120,
+    'store_instagram' => 80,
+    'notify_email' => 150,
+    'order_hold_hours' => 3,
+];
+
+/** El vencimiento de pedidos corre en segundo plano: si falla, la página igual responde. */
+function expire_orders(PDO $pdo): void
+{
+    try {
+        Orders::expireStale($pdo);
+    } catch (Throwable $error) {
+        error_log((string) $error);
+    }
+}
 
 function limit_text(string $value, int $max): string
 {
@@ -137,7 +160,10 @@ try {
 
     if ($method === 'GET' && $path === '/settings') {
         $pdo = Database::connect();
-        $public = ['store_name', 'currency', 'bank_alias', 'bank_cbu', 'bank_holder', 'bank_name', ...array_keys(Legal::SETTINGS)];
+        $public = [
+            'currency', 'points_per_currency', 'bank_alias', 'bank_cbu', 'bank_holder', 'bank_name', ...array_keys(Legal::SETTINGS),
+            ...array_diff(array_keys(STORE_SETTINGS), ['notify_email']),
+        ];
         $stmt = $pdo->prepare('SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN (' . implode(',', array_fill(0, count($public), '?')) . ')');
         $stmt->execute($public);
         $rows = $stmt->fetchAll();
@@ -149,7 +175,9 @@ try {
     }
 
     if ($method === 'GET' && $path === '/catalogo') {
-        respond(200, ['products' => Catalog::products(Database::connect())]);
+        $pdo = Database::connect();
+        expire_orders($pdo);
+        respond(200, ['products' => Catalog::products($pdo)]);
     }
 
     if ($method === 'POST' && $path === '/pedidos') {
@@ -159,6 +187,7 @@ try {
         Security::guard($pdo, 'pedido:' . Security::ip());
         Security::hit($pdo, 'pedido:' . Security::ip(), 15, 3600, 3600);
         $account = Accounts::find($pdo, (int) ($_SESSION['user_id'] ?? 0));
+        expire_orders($pdo);
         $order = Orders::create($pdo, $payload, $account !== null && $account['role'] === 'cliente' ? $account : null);
         if (is_string($order)) {
             respond(422, ['error' => $order]);
@@ -181,10 +210,25 @@ try {
     if ($method === 'POST' && $path === '/postventa') {
         $pdo = Database::connect();
         Security::guard($pdo, 'postventa:' . Security::ip());
-        $result = Legal::createRequest($pdo, read_json());
+        $payload = read_json();
+        $result = Legal::createRequest($pdo, $payload);
         if (is_string($result)) {
             Security::hit($pdo, 'postventa:' . Security::ip(), 8, 900, 900);
             respond(422, ['error' => $result]);
+        }
+        $owner = Mailer::owner($pdo);
+        if (!$result['existing'] && $owner !== '') {
+            Mailer::send($owner, "{$result['type']}: pedido {$result['number']}", implode("\n", [
+                "Llegó una solicitud de postventa por la web.",
+                '',
+                "Tipo: {$result['type']}",
+                "Código: {$result['code']}",
+                "Pedido: {$result['number']}",
+                'Email: ' . (string) ($payload['email'] ?? ''),
+                'Motivo: ' . limit_text(trim((string) ($payload['reason'] ?? '')), 2000),
+                '',
+                'Respondela desde el panel, en Postventa. Si es un arrepentimiento, la ley pide resolverlo sin costo para el cliente.',
+            ]), (string) ($payload['email'] ?? ''));
         }
         respond(201, ['request' => $result]);
     }
@@ -254,8 +298,25 @@ try {
             'subject' => $subject === '' ? null : limit_text($subject, 180),
             'message' => limit_text($message, 5000),
         ]);
+        $id = (int) $pdo->lastInsertId();
 
-        respond(201, ['ok' => true, 'id' => (int) $pdo->lastInsertId()]);
+        $owner = Mailer::owner($pdo);
+        if ($owner !== '') {
+            Mailer::send($owner, 'Mensaje de ' . limit_text($name, 80) . ($subject !== '' ? ': ' . limit_text($subject, 80) : ''), implode("\n", [
+                'Te escribieron desde el formulario de contacto de la web.',
+                '',
+                'Nombre: ' . limit_text($name, 150),
+                "Email: {$email}",
+                'Teléfono: ' . ($phone === '' ? '-' : limit_text($phone, 30)),
+                'Asunto: ' . ($subject === '' ? '-' : limit_text($subject, 180)),
+                '',
+                limit_text($message, 5000),
+                '',
+                'Respondé este email para contestarle. También lo ves en el panel, en Mensajes.',
+            ]), $email);
+        }
+
+        respond(201, ['ok' => true, 'id' => $id]);
     }
 
     if ($method === 'POST' && $path === '/registro') {
@@ -271,8 +332,9 @@ try {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150) {
             respond(422, ['error' => 'Revisá que el email esté bien escrito.']);
         }
-        if (strlen($password) < 8 || strlen($password) > 200) {
-            respond(422, ['error' => 'La contraseña tiene que tener al menos 8 caracteres.']);
+        $weak = Accounts::passwordProblem($password, $email);
+        if ($weak !== null) {
+            respond(422, ['error' => $weak]);
         }
 
         $pdo = Database::connect();
@@ -296,17 +358,16 @@ try {
             respond(422, ['error' => 'Escribí tu email y tu contraseña.']);
         }
 
+        // El bloqueo es por IP y por cuenta desde esa IP: quien prueba claves desde otro lugar no deja afuera al dueño.
         $pdo = Database::connect();
         $ip = Security::ip();
         Security::guard($pdo, 'login-ip:' . $ip);
         Security::guard($pdo, 'login-cuenta-ip:' . $email . '|' . $ip);
-        Security::guard($pdo, 'login-cuenta:' . $email);
 
         $id = Accounts::verify($pdo, $email, $password);
         if ($id === null) {
             Security::hit($pdo, 'login-ip:' . $ip, 20, 900, 1800);
             Security::hit($pdo, 'login-cuenta-ip:' . $email . '|' . $ip, 5, 900, 900);
-            Security::hit($pdo, 'login-cuenta:' . $email, 30, 3600, 3600);
             respond(401, ['error' => 'El email o la contraseña no coinciden.']);
         }
 
@@ -398,9 +459,12 @@ try {
 
         if ($method === 'POST' && $path === '/admin/productos/eliminar') {
             $id = (int) (read_json()['id'] ?? 0);
-            Catalog::deleteProduct($pdo, $id);
-            Legal::audit($pdo, (int) $admin['id'], 'Eliminó producto', 'producto', $id);
-            respond(200, ['ok' => true]);
+            $paused = Catalog::deleteProduct($pdo, $id);
+            if ($paused === null) {
+                respond(404, ['error' => 'Ese producto ya no está en la tienda. Recargá la página.']);
+            }
+            Legal::audit($pdo, (int) $admin['id'], 'Eliminó producto', 'producto', $id, $paused > 0 ? ['combosPausados' => $paused] : []);
+            respond(200, ['ok' => true, 'pausedCombos' => $paused]);
         }
 
         if ($method === 'POST' && $path === '/admin/categorias') {
@@ -425,7 +489,52 @@ try {
         }
 
         if ($method === 'GET' && $path === '/admin/ventas') {
-            respond(200, ['orders' => Orders::all($pdo), 'statuses' => Orders::STATUSES]);
+            expire_orders($pdo);
+            respond(200, ['orders' => Orders::all($pdo), 'statuses' => Orders::STATUSES, 'transitions' => Orders::TRANSITIONS, 'holdHours' => Orders::holdHours($pdo)]);
+        }
+
+        if ($method === 'GET' && $path === '/admin/mensajes') {
+            $rows = $pdo->query(
+                "SELECT id, name, email, phone, subject, message, status, created_at FROM contact_messages
+                 ORDER BY status = 'NEW' DESC, created_at DESC, id DESC LIMIT 300"
+            )->fetchAll();
+            respond(200, ['messages' => array_map(static fn (array $row) => [
+                'id' => (int) $row['id'],
+                'name' => $row['name'],
+                'email' => (string) $row['email'],
+                'phone' => (string) $row['phone'],
+                'subject' => (string) $row['subject'],
+                'message' => $row['message'],
+                'status' => $row['status'],
+                'date' => $row['created_at'],
+            ], $rows)]);
+        }
+
+        if ($method === 'POST' && $path === '/admin/mensajes/estado') {
+            $payload = read_json();
+            $status = (string) ($payload['status'] ?? '');
+            if (!in_array($status, ['NEW', 'READ', 'REPLIED', 'CLOSED'], true)) {
+                respond(422, ['error' => 'Ese estado no existe.']);
+            }
+            $id = (int) ($payload['id'] ?? 0);
+            $found = $pdo->prepare('SELECT 1 FROM contact_messages WHERE id = ?');
+            $found->execute([$id]);
+            if (!$found->fetchColumn()) {
+                respond(404, ['error' => 'No encontramos ese mensaje.']);
+            }
+            $pdo->prepare('UPDATE contact_messages SET status = ? WHERE id = ?')->execute([$status, $id]);
+            respond(200, ['ok' => true]);
+        }
+
+        if ($method === 'GET' && $path === '/admin/ajustes') {
+            $keys = array_keys(STORE_SETTINGS);
+            $stmt = $pdo->prepare('SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN (' . implode(',', array_fill(0, count($keys), '?')) . ')');
+            $stmt->execute($keys);
+            $values = array_fill_keys($keys, '');
+            foreach ($stmt->fetchAll() as $row) {
+                $values[$row['setting_key']] = (string) $row['setting_value'];
+            }
+            respond(200, ['settings' => $values, 'holdHours' => Orders::holdHours($pdo)]);
         }
 
         if ($method === 'POST' && $path === '/admin/ventas/estado') {
@@ -526,6 +635,7 @@ try {
         }
 
         if ($method === 'GET' && $path === '/admin/resumen') {
+            expire_orders($pdo);
             respond(200, Orders::summary($pdo));
         }
 
@@ -535,12 +645,28 @@ try {
                 'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?)
                  ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)'
             );
-            $limits = ['bank_alias' => 120, 'bank_cbu' => 120, 'bank_holder' => 120, 'bank_name' => 120] + Legal::SETTINGS;
+            $limits = ['bank_alias' => 120, 'bank_cbu' => 120, 'bank_holder' => 120, 'bank_name' => 120] + Legal::SETTINGS + STORE_SETTINGS;
             foreach (['vat_rate', 'installments_rate', 'installments_cftea'] as $key) {
                 $value = str_replace(',', '.', trim((string) ($payload[$key] ?? '')));
                 if ($value !== '' && (!is_numeric($value) || (float) $value < 0 || (float) $value > 999)) {
                     respond(422, ['error' => 'Los porcentajes van solo con números, por ejemplo 18 o 95,4.']);
                 }
+            }
+            foreach (['store_email' => 'El email de contacto', 'notify_email' => 'El email de avisos'] as $key => $label) {
+                $value = trim((string) ($payload[$key] ?? ''));
+                if ($value !== '' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    respond(422, ['error' => "{$label} no está bien escrito."]);
+                }
+            }
+            if (array_key_exists('store_phone', $payload) && strlen((string) preg_replace('/\D/', '', (string) $payload['store_phone'])) < 10) {
+                respond(422, ['error' => 'Escribí el teléfono con código de área, por ejemplo 3541 21-9547.']);
+            }
+            $hold = trim((string) ($payload['order_hold_hours'] ?? ''));
+            if ($hold !== '' && (!ctype_digit($hold) || (int) $hold < 1 || (int) $hold > 168)) {
+                respond(422, ['error' => 'El plazo para pagar va en horas, entre 1 y 168 (una semana).']);
+            }
+            if (array_key_exists('store_name', $payload) && trim((string) $payload['store_name']) === '') {
+                respond(422, ['error' => 'Escribí el nombre de la tienda.']);
             }
             $changed = [];
             foreach ($limits as $key => $max) {

@@ -72,8 +72,8 @@ export function LoginPage({
       setError("Escribí tu email y tu contraseña.");
       return;
     }
-    if (signup && password.length < 8) {
-      setError("La contraseña tiene que tener al menos 8 caracteres.");
+    if (signup && (password.length < 8 || !/\p{L}/u.test(password) || !/\d/.test(password))) {
+      setError("La contraseña tiene que tener al menos 8 caracteres, con letras y números.");
       return;
     }
 
@@ -139,7 +139,7 @@ export function LoginPage({
                   type={show ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder={signup ? "Mínimo 8 caracteres" : "Tu contraseña"}
+                  placeholder={signup ? "8 o más, con letras y números" : "Tu contraseña"}
                   className={`${field} pr-12`}
                 />
                 <button

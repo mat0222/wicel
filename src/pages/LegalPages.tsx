@@ -103,7 +103,7 @@ export function LegalPage({ doc, settings, onNavigate }: { doc: Doc; settings: S
           </ul>
         </Section>
         <Section title="Entrega">
-          <p>{deliveryText} Si el costo del envío no te sirve, podés cancelar el pedido antes de pagar.</p>
+          <p>{deliveryText()} Si el costo del envío no te sirve, podés cancelar el pedido antes de pagar.</p>
           <p>Horario del local: {hours.map((row) => `${row.label.toLowerCase()}: ${shiftsText(row.shifts).toLowerCase()}`).join("; ")}.</p>
         </Section>
         <Section title="Derecho de arrepentimiento">

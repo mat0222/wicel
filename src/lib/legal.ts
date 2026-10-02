@@ -8,7 +8,7 @@ export const LEGAL_DATE = "30/09/2026";
 
 export const consumerDefenseUrl = "https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario";
 
-export const deliveryText = `Retiro en el local (${fullAddress}) o envío a domicilio a coordinar. El costo y el plazo del envío se informan antes de pagar.`;
+export const deliveryText = () => `Retiro en el local (${fullAddress}) o envío a domicilio a coordinar. El costo y el plazo del envío se informan antes de pagar.`;
 
 export const warrantyMonths = (condition: Product["condition"]) => (condition === "Usados" ? 3 : 6);
 

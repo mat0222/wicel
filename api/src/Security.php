@@ -44,9 +44,52 @@ final class Security
         $pdo->prepare('DELETE FROM security_throttle WHERE throttle_key = ?')->execute([self::hash($key)]);
     }
 
+    /**
+     * IP del visitante. Si el pedido llega desde un proxy o CDN listado en 'trusted_proxies' (config.php),
+     * se toma la IP original de X-Forwarded-For; de cualquier otro origen esa cabecera se ignora porque se puede falsificar.
+     */
     public static function ip(): string
     {
-        return (string) ($_SERVER['REMOTE_ADDR'] ?? 'sin-ip');
+        $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $trusted = (array) Config::get('trusted_proxies', []);
+        if ($remote === '' || !self::inList($remote, $trusted)) {
+            return $remote === '' ? 'sin-ip' : $remote;
+        }
+        $chain = array_map('trim', explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')));
+        for ($i = count($chain) - 1; $i >= 0; $i--) {
+            if (filter_var($chain[$i], FILTER_VALIDATE_IP) && !self::inList($chain[$i], $trusted)) {
+                return $chain[$i];
+            }
+        }
+
+        return $remote;
+    }
+
+    /** @param string[] $list IPs sueltas o rangos CIDR, por ejemplo 173.245.48.0/20 */
+    private static function inList(string $ip, array $list): bool
+    {
+        $binary = @inet_pton($ip);
+        if ($binary === false) {
+            return false;
+        }
+        foreach ($list as $entry) {
+            [$net, $bits] = array_pad(explode('/', (string) $entry, 2), 2, null);
+            $netBinary = @inet_pton((string) $net);
+            if ($netBinary === false || strlen($netBinary) !== strlen($binary)) {
+                continue;
+            }
+            $bits = $bits === null ? strlen($binary) * 8 : max(0, min((int) $bits, strlen($binary) * 8));
+            $bytes = intdiv($bits, 8);
+            if (substr($binary, 0, $bytes) !== substr($netBinary, 0, $bytes)) {
+                continue;
+            }
+            $rest = $bits % 8;
+            if ($rest === 0 || ((ord($binary[$bytes]) ^ ord($netBinary[$bytes])) & (0xFF << (8 - $rest)) & 0xFF) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Huella del navegador: si la cookie de sesión se roba y se usa desde otro navegador, la sesión se corta. */

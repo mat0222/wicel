@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { ProductPhoto } from "./RealPhoneArt";
-import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, pointSteps, stockLabel, type Product } from "../data";
+import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../data";
 import { fetchMyOrders, type Account, type Order, type StoreSettings } from "../lib/api";
 import { deliveryText, netOfTaxes, warrantyMonths } from "../lib/legal";
 
@@ -61,7 +61,8 @@ export function ProductDialog({
   const [variantId, setVariantId] = useState(firstAvailable.variantId);
   const [qty, setQty] = useState(1);
   const color = product.colors.find((item) => item.variantId === variantId) ?? firstAvailable;
-  const left = Math.max(0, color.stock - inCart(color.variantId));
+  const left = Math.max(0, Math.min(color.stock, MAX_PER_ITEM) - inCart(color.variantId));
+  const atLimit = color.stock > 0 && inCart(color.variantId) >= Math.min(color.stock, MAX_PER_ITEM);
   const stock = stockLabel(color.stock);
   const photo = color.image ?? product.image;
   const facts = [product.storage, product.ram ? `${product.ram} RAM` : "", product.condition === "Usados" ? "Usado" : "Nuevo"].filter(Boolean);
@@ -121,7 +122,7 @@ export function ProductDialog({
               <button type="button" aria-label="Una unidad más" disabled={qty >= left} className="grid h-12 w-11 place-items-center disabled:opacity-40" onClick={() => setQty((value) => Math.min(left, value + 1))}><Icon name="plus" className="h-4 w-4" /></button>
             </div>
             <button type="button" disabled={left <= 0} className="h-12 flex-1 rounded-full bg-ink px-5 font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onAdd(color.variantId, Math.min(qty, left))}>
-              {color.stock <= 0 ? "Sin stock" : left <= 0 ? "Ya tenés todo el stock en el carrito" : "Agregar al carrito"}
+              {color.stock <= 0 ? "Sin stock" : atLimit ? (color.stock > MAX_PER_ITEM ? `Máximo ${MAX_PER_ITEM} por pedido` : "Ya tenés todo el stock en el carrito") : "Agregar al carrito"}
             </button>
             <button type="button" aria-label={favorite ? "Quitar de favoritos" : "Guardar en favoritos"} aria-pressed={favorite} className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border ${favorite ? "border-bad/30 text-bad" : "border-line text-muted hover:text-ink"}`} onClick={onFavorite}>
               <Icon name="heart" filled={favorite} />
@@ -146,7 +147,7 @@ export function ProductDialog({
             </div>
             <div>
               <dt className="font-semibold">Entrega</dt>
-              <dd className="mt-0.5 text-muted">{deliveryText}</dd>
+              <dd className="mt-0.5 text-muted">{deliveryText()}</dd>
             </div>
             <div>
               <dt className="font-semibold">Arrepentimiento</dt>

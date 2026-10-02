@@ -2,6 +2,13 @@ import type { PaymentId, Product } from "../data";
 
 export type StoreSettings = {
   store_name?: string;
+  store_phone?: string;
+  store_email?: string;
+  store_address?: string;
+  store_city?: string;
+  store_instagram?: string;
+  notify_email?: string;
+  order_hold_hours?: string;
   currency?: string;
   points_per_currency?: string;
   usd_exchange_rate?: string;
@@ -127,6 +134,7 @@ export type PlacedOrder = {
   address: string;
   delivery: "PICKUP" | "SHIPPING";
   cftea: string | null;
+  holdHours: number;
 };
 
 export type Category = { id: number; name: string; slug: string; description: string; phoneSpecs: boolean; products: number };
@@ -156,6 +164,26 @@ export type Redemption = {
   email: string;
   phone: string;
   date: string;
+};
+export type ContactMessage = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  subject: string;
+  message: string;
+  status: "NEW" | "READ" | "REPLIED" | "CLOSED";
+  date: string;
+};
+export type StoreForm = {
+  store_name: string;
+  store_phone: string;
+  store_email: string;
+  store_address: string;
+  store_city: string;
+  store_instagram: string;
+  notify_email: string;
+  order_hold_hours: string;
 };
 export type PlacedRedemption = { code: string; reward: string; points: number; balance: number };
 
@@ -241,10 +269,10 @@ export const adjustPoints = (userId: number, points: number, reason: string) => 
 export const fetchAdminOptions = () => request<AdminOptions>("/admin/opciones");
 export const saveProduct = (form: FormData) => request<{ id: number }>("/admin/productos", { method: "POST", body: form });
 export const saveCombo = (combo: { id: number | null; name: string; price: number; oldPrice: number | null; description: string; featured: boolean; items: { variantId: number; quantity: number }[] }) => post<{ id: number }>("/admin/combos", combo);
-export const deleteProduct = (id: number) => post<{ ok: true }>("/admin/productos/eliminar", { id });
+export const deleteProduct = (id: number) => post<{ ok: true; pausedCombos: number }>("/admin/productos/eliminar", { id });
 export const saveCategory = (category: { id?: number; name: string; description: string; phoneSpecs: boolean }) => pick(post<{ categories: Category[] }>("/admin/categorias", category), "categories");
 export const deleteCategory = (id: number) => pick(post<{ categories: Category[] }>("/admin/categorias/eliminar", { id }), "categories");
-export const fetchSales = () => request<{ orders: Order[]; statuses: Record<Order["status"], string> }>("/admin/ventas");
+export const fetchSales = () => request<{ orders: Order[]; statuses: Record<Order["status"], string>; transitions: Record<Order["status"], Order["status"][]>; holdHours: number }>("/admin/ventas");
 export const setSaleStatus = (id: number, status: Order["status"]) => pick(post<{ orders: Order[] }>("/admin/ventas/estado", { id, status }), "orders");
 export const fetchAdminRewards = () => request<{ rewards: Reward[]; redemptions: Redemption[]; statuses: Record<Redemption["status"], string> }>("/admin/canjes");
 export const saveReward = (form: FormData) => pick(request<{ rewards: Reward[] }>("/admin/canjes/premio", { method: "POST", body: form }), "rewards");
@@ -253,6 +281,10 @@ export const setRedemptionStatus = (id: number, status: Redemption["status"]) =>
 export const fetchSummary = () => request<Summary>("/admin/resumen");
 export const saveBankSettings = (settings: Pick<StoreSettings, "bank_alias" | "bank_cbu" | "bank_holder" | "bank_name">) => post<{ ok: true }>("/admin/ajustes", settings);
 export const saveLegalSettings = (settings: LegalSettings) => post<{ ok: true }>("/admin/ajustes", settings);
+export const fetchStoreSettings = () => pick(request<{ settings: StoreForm }>("/admin/ajustes"), "settings");
+export const saveStoreSettings = (settings: StoreForm) => post<{ ok: true }>("/admin/ajustes", settings);
+export const fetchMessages = () => pick(request<{ messages: ContactMessage[] }>("/admin/mensajes"), "messages");
+export const setMessageStatus = (id: number, status: ContactMessage["status"]) => post<{ ok: true }>("/admin/mensajes/estado", { id, status });
 export const registerImei = (saleItemId: number, imei: string, serial: string) => pick(post<{ orders: Order[] }>("/admin/ventas/imei", { saleItemId, imei, serial }), "orders");
 export const fetchAfterSales = () => request<{ requests: AfterSalesRequest[]; requestStatuses: Record<AfterSalesRequest["status"], string>; warranties: Warranty[]; claimStatuses: Record<string, string> }>("/admin/postventa");
 export const setRequestStatus = (id: number, status: AfterSalesRequest["status"], note: string) => pick(post<{ requests: AfterSalesRequest[] }>("/admin/postventa/estado", { id, status, note }), "requests");
