@@ -2,7 +2,7 @@
 
 // Copiar como config.php y completar. config.php no se sube a git.
 return [
-    // Base de datos: usar el usuario de database/008_usuario_app.sql, nunca root.
+    // Base de datos: un usuario con permisos SELECT, INSERT, UPDATE y DELETE sobre la base, nunca root.
     'host' => '127.0.0.1',
     'port' => 3306,
     'database' => 'wicel',

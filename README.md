@@ -10,7 +10,7 @@ api/                 API en PHP
   src/               lógica: cuentas, catálogo, pedidos, canjes, legal, seguridad, emails
   uploads/           fotos que se suben desde el panel (no se guardan en git)
   config.example.php copiar como config.php y completar
-database/            base MySQL: correr en orden de 001 a 008
+database/wicel.sql   base MySQL completa: se importa en una base vacía
 public/              archivos estáticos (logo, banner, fotos de ejemplo, .htaccess)
 scripts/             ayuda para desarrollo (levanta Docker al hacer npm run dev)
 src/                 tienda y panel en React
@@ -24,7 +24,7 @@ Los archivos sueltos en la raíz (`package.json`, `vite.config.ts`, `tsconfig*.j
 
 ## Desarrollo
 
-1. MySQL 8 con la base `wicel` (archivos de `database/`, en orden).
+1. MySQL 8 con una base `wicel` vacía, importando `database/wicel.sql`.
 2. Copiar `api/config.example.php` a `api/config.php` y completar los datos.
 3. `npm install` y después `npm run dev`. Abre Docker con la API y la tienda en http://localhost:5173.
 
