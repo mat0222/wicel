@@ -1,0 +1,184 @@
+@import "tailwindcss";
+@import "@fontsource-variable/archivo/wdth.css";
+
+@theme {
+  --font-sans: "Archivo Variable", system-ui, sans-serif;
+  --color-brand: #ffd83d;
+  --color-brand-strong: #ffc107;
+  --color-brand-soft: #fff5c7;
+  --color-paper: #f3f3f1;
+  --color-ink: #151515;
+  --color-muted: #5e5e5a;
+  --color-line: #e0e0dc;
+  --color-gold: #735800;
+  --color-ok: #1b7a3a;
+  --color-ok-soft: #e5f4ea;
+  --color-bad: #b42318;
+  --color-bad-soft: #fdecea;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+  background: #242424;
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid #ffd83d;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #242424;
+  color: #ffffff;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.bg-brand {
+  color: #080808 !important;
+}
+
+button.bg-brand:hover,
+a.bg-brand:hover {
+  background-color: #ffc107 !important;
+}
+
+/* Tienda en claro; el panel admin define sus propios colores oscuros. */
+html:has(.store),
+html:has(.store) body,
+html:has(.store) #root {
+  background: var(--color-paper);
+}
+
+.store {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.store ::selection {
+  background: #ffd83d;
+  color: #080808;
+}
+
+.store :focus-visible {
+  outline-color: #151515;
+}
+
+.wicel-card {
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.wicel-card:hover {
+  border-color: #c9c9c4;
+  box-shadow: 0 10px 30px rgb(21 21 21 / 8%);
+}
+
+.field {
+  margin-top: 0.375rem;
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cfcfca;
+  background: #ffffff;
+  padding-inline: 0.75rem;
+  color: var(--color-ink);
+  outline: none;
+}
+
+.field::placeholder {
+  color: #85857f;
+}
+
+.field:focus {
+  border-color: #151515;
+  box-shadow: 0 0 0 3px rgb(255 216 61 / 45%);
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--color-bad);
+}
+
+.price {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.display {
+  font-stretch: 112%;
+  letter-spacing: -0.025em;
+}
+
+.wicel-rise {
+  animation: wicel-rise 640ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes wicel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.admin-table {
+  color: #ffffff;
+}
+
+.admin-sidebar {
+  transform: translateX(-100%);
+}
+
+.admin-sidebar.is-open {
+  transform: translateX(0);
+}
+
+@media (min-width: 1024px) {
+  .admin-sidebar {
+    transform: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .text-3xl {
+    font-size: 1.65rem;
+  }
+}

@@ -1,0 +1,20 @@
+Options -Indexes
+ServerSignature Off
+
+RewriteEngine On
+
+RewriteRule ^uploads/productos/[a-f0-9]+\.(jpg|png|webp)$ - [L]
+RewriteRule ^index\.php$ - [L]
+RewriteRule ^ index.php [QSA,L]
+
+<FilesMatch "^(?!index\.php$).+\.(?i:php|phtml|phar|sql|md|txt|json|lock|yml|yaml|ini|log|bak)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(\.|Dockerfile|router\.php|config)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
