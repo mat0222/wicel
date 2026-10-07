@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { CASH_OFF, financing, formatPrice, INSTALLMENTS, type View } from "../../lib/data";
+import { CASH_OFF, financing, formatPrice, installmentCost, INSTALLMENTS, type View } from "../../lib/data";
 import { lookupOrder, sendRequest, type OrderReceipt, type PlacedRequest, type RequestType, type StoreSettings } from "../../lib/api";
 import { consumerDefenseUrl, deliveryText, lastOrder, LEGAL_DATE } from "../../lib/legal";
 import { email, fullAddress, hours, phone, shiftsText, whatsapp } from "../../lib/store";
@@ -81,7 +81,7 @@ export function LegalPage({ doc, settings, onNavigate }: { doc: Doc; settings: S
         <Section title="Precios y stock">
           <p>Los precios están en pesos argentinos y son precios finales. El precio de lista es el de tarjeta en 1 pago. Pagando en efectivo en el local o por transferencia tenés {off}% de descuento.</p>
           {financing.on
-            ? <p>Con tarjeta también podés pagar en {INSTALLMENTS} cuotas con un recargo total del {Math.round(financing.rate * 1000) / 10}% sobre el precio de lista. Costo financiero total efectivo anual (CFTEA): <strong>{financing.cftea}%</strong>.</p>
+            ? <p>Con tarjeta también podés pagar en {INSTALLMENTS} cuotas {installmentCost()} sobre el precio de lista.</p>
             : <p>Por ahora no ofrecemos pago en cuotas por la web.</p>}
           <p>El stock que ves es el real del local. Si al confirmar un producto se quedó sin stock, te avisamos y el pedido no se registra.</p>
         </Section>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
-import { financing, INSTALLMENTS, type View } from "../../lib/data";
+import { financing, installmentCost, INSTALLMENTS, type View } from "../../lib/data";
 import { sendContact } from "../../lib/api";
 import { address, city, directions, email, hours, instagram, instagramUser, mapQuery, phone, phoneHref, shiftsText, storeStatus, storeTime, whatsapp } from "../../lib/store";
 
@@ -118,7 +118,7 @@ export function ContactPage({ onNavigate }: { onNavigate: (view: View) => void }
           <div className="mt-5 divide-y divide-line border-y border-line">
             {[
               ["¿Tienen financiación?", financing.on
-                ? `Pagando en efectivo o transferencia tenés 10% menos. Con tarjeta podés pagar en 1 pago al precio de lista o en ${INSTALLMENTS} cuotas con ${Math.round(financing.rate * 1000) / 10}% de recargo (CFTEA ${financing.cftea}%).`
+                ? `Pagando en efectivo o transferencia tenés 10% menos. Con tarjeta podés pagar en 1 pago al precio de lista o en ${INSTALLMENTS} cuotas ${installmentCost()}.`
                 : "Pagando en efectivo o transferencia tenés 10% menos. Con tarjeta pagás el precio de lista en 1 pago."],
               ["¿Puedo consultar stock por WhatsApp?", `Sí. Escribinos al ${phone} y te decimos si tenemos el modelo y el color que buscás.`],
               ["¿Hacen envíos?", "Sí, hacemos envíos a domicilio. El costo y el plazo los coordinamos con vos antes de que pagues."],

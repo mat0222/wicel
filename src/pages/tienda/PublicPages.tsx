@@ -57,7 +57,7 @@ const payments: { id: PaymentId; title: string; text: (list: number) => string }
   { id: "transferencia", title: "Transferencia", text: (list) => `10% menos: ${formatPrice(cashPrice(list))}` },
   { id: "efectivo", title: "Efectivo en el local", text: (list) => `10% menos: ${formatPrice(cashPrice(list))}` },
   { id: "tarjeta-1", title: "Tarjeta en 1 pago", text: (list) => `Precio de lista: ${formatPrice(list)}` },
-  { id: "tarjeta-12", title: `Tarjeta en ${INSTALLMENTS} cuotas`, text: (list) => `${INSTALLMENTS} × ${formatPrice(installmentAmount(list))} (total ${formatPrice(financedTotal(list))}). CFTEA ${financing.cftea}%` },
+  { id: "tarjeta-12", title: `Tarjeta en ${INSTALLMENTS} cuotas`, text: (list) => `${INSTALLMENTS} × ${formatPrice(installmentAmount(list))} (total ${formatPrice(financedTotal(list))})${financing.cftea ? `. CFTEA ${financing.cftea}%` : ""}` },
 ];
 
 type Field = "nombre" | "apellido" | "email" | "telefono" | "direccion" | "terminos";
@@ -248,11 +248,11 @@ export function CartPage({
               );
             })}
           </div>
-          <aside className={`price h-fit rounded-[28px] border border-line bg-white p-6 ${checkout ? "" : "lg:sticky lg:top-28"}`}>
+          <aside className={`price h-fit rounded-[28px] border border-line bg-white p-6 ${checkout ? "" : "lg:sticky lg:top-20"}`}>
             <h2 className="display text-xl font-bold">Resumen</h2>
             <div className="mt-5 flex justify-between text-sm text-muted"><span>Efectivo o transferencia</span><span className="font-semibold text-ink">{formatPrice(cashPrice(listTotal))}</span></div>
             <div className="mt-3 flex justify-between text-sm text-muted"><span>Tarjeta en 1 pago</span><span>{formatPrice(listTotal)}</span></div>
-            {financing.on ? <div className="mt-3 flex justify-between gap-3 text-sm text-muted"><span>Tarjeta en {INSTALLMENTS} cuotas</span><span className="text-right">{INSTALLMENTS} × {formatPrice(installmentAmount(listTotal))}<span className="block text-[11px]">total {formatPrice(financedTotal(listTotal))}</span><span className="block text-[11px] font-bold text-ink">CFTEA {financing.cftea}%</span></span></div> : null}
+            {financing.on ? <div className="mt-3 flex justify-between gap-3 text-sm text-muted"><span>Tarjeta en {INSTALLMENTS} cuotas</span><span className="text-right">{INSTALLMENTS} × {formatPrice(installmentAmount(listTotal))}<span className="block text-[11px]">total {formatPrice(financedTotal(listTotal))}</span>{financing.cftea ? <span className="block text-[11px] font-bold text-ink">CFTEA {financing.cftea}%</span> : null}</span></div> : null}
             <div className="mt-3 flex justify-between gap-3 text-sm text-muted"><span>Entrega</span><span className="text-right">Retiro en el local o envío a coordinar</span></div>
             <div className="mt-5 flex justify-between gap-3 border-t border-line pt-4 font-bold"><span>Total con {payments.find((method) => method.id === pago)?.title.toLowerCase()}</span><span className="shrink-0">{formatPrice(total)}</span></div>
             {net !== null ? <p className="mt-1 text-right text-xs text-muted">Precio sin impuestos nacionales: {formatPrice(net)}</p> : null}
@@ -348,7 +348,7 @@ export function CartPage({
                     </div>
                   ) : null}
                   <div className="flex justify-between gap-3"><span>Entrega</span><span className="text-right">{delivery === "PICKUP" ? "Retiro en el local, sin costo" : "Envío a domicilio, costo a coordinar antes de pagar"}</span></div>
-                  {pago === "tarjeta-12" ? <div className="flex justify-between gap-3"><span>{INSTALLMENTS} cuotas de</span><span>{formatPrice(installmentAmount(listTotal))} · CFTEA {financing.cftea}%</span></div> : null}
+                  {pago === "tarjeta-12" ? <div className="flex justify-between gap-3"><span>{INSTALLMENTS} cuotas de</span><span>{formatPrice(installmentAmount(listTotal))}{financing.cftea ? ` · CFTEA ${financing.cftea}%` : ""}</span></div> : null}
                 </div>
                 <div className="mt-2 flex justify-between gap-3 border-t border-line pt-2 text-base font-bold text-ink"><span>Total a pagar</span><span>{formatPrice(total)}</span></div>
               </section>
@@ -385,7 +385,7 @@ export function CartPage({
             </div>
             <div className="space-y-3 px-8 pb-6 text-sm">
               <div className="flex justify-between gap-4"><span className="text-muted">Entrega</span><span className="max-w-[220px] text-right font-semibold text-ink">{order.delivery === "PICKUP" ? `Retiro en ${fullAddress}` : `Envío a ${order.address}. Costo a coordinar antes de pagar`}</span></div>
-              <div className="flex justify-between gap-4"><span className="text-muted">Pago</span><span className="text-right font-semibold text-ink">{order.paymentLabel}{order.installmentAmount ? `, ${order.installments} × ${formatPrice(order.installmentAmount)}, CFTEA ${order.cftea}%` : ""}</span></div>
+              <div className="flex justify-between gap-4"><span className="text-muted">Pago</span><span className="text-right font-semibold text-ink">{order.paymentLabel}{order.installmentAmount ? `, ${order.installments} × ${formatPrice(order.installmentAmount)}${order.cftea ? `, CFTEA ${order.cftea}%` : ""}` : ""}</span></div>
               <div className="flex justify-between gap-4 border-t border-line pt-3"><span className="text-muted">Total</span><span className="price text-lg font-bold">{formatPrice(order.total)}</span></div>
               {order.payment === "transferencia" ? (
                 <div className="rounded-xl bg-paper p-3">

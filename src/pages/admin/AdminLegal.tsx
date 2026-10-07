@@ -268,7 +268,7 @@ export function LegalDesk() {
         !form.legal_cuit && "CUIT",
         !form.legal_tax_status && "Condición frente al IVA",
         form.legal_tax_status === "Responsable Inscripto" && !form.vat_rate && "IVA incluido en los precios",
-        !form.installments_cftea && "CFTEA de las cuotas (sin este dato no se ofrecen cuotas)",
+        !form.installments_cftea && "CFTEA de las cuotas (las cuotas se muestran igual; este dato figura al lado cuando lo cargás)",
       ].filter((item): item is string => Boolean(item))
     : [];
 
@@ -305,10 +305,10 @@ export function LegalDesk() {
           </div>
 
           <h3 className="mt-6 font-bold">Cuotas con tarjeta</h3>
-          <p className="mt-1 text-sm text-[#d4d4d4]">Las 12 cuotas solo se ofrecen si cargás el CFTEA que te informa tu procesador de pagos. Si lo dejás vacío, la tienda muestra solo tarjeta en 1 pago.</p>
+          <p className="mt-1 text-sm text-[#d4d4d4]">Con el recargo cargado, la tienda ofrece 12 cuotas. El CFTEA lo informa tu procesador de pagos: si lo completás, aparece junto a la cuota.</p>
           <div className="mt-2 grid gap-3 md:grid-cols-3">
             <label className="text-xs font-semibold text-[#d4d4d4]">Recargo total de las cuotas (%)<input value={form.installments_rate} onChange={(event) => update("installments_rate", event.target.value)} inputMode="decimal" className={input} /></label>
-            <label className="text-xs font-semibold text-[#d4d4d4]">CFTEA (%)<input value={form.installments_cftea} onChange={(event) => update("installments_cftea", event.target.value)} inputMode="decimal" placeholder="Vacío: sin cuotas" className={input} /></label>
+            <label className="text-xs font-semibold text-[#d4d4d4]">CFTEA (%)<input value={form.installments_cftea} onChange={(event) => update("installments_cftea", event.target.value)} inputMode="decimal" placeholder="Opcional" className={input} /></label>
           </div>
 
           <h3 className="mt-6 font-bold">Garantía y cambios</h3>

@@ -4,7 +4,7 @@ import { fetchCatalog, fetchSession, fetchSettings, logout, type Account, type S
 import { AccountDialog, InfoDialog, ProductDialog } from "./components/ShopDialogs";
 import { StoreHeader } from "./components/StoreHeader";
 import { MAX_PER_ITEM, setFinancing, type AdminSection, type CartItem, type Product, type View } from "./lib/data";
-import { applyStoreSettings, whatsapp } from "./lib/store";
+import { applyStoreSettings } from "./lib/store";
 import { CatalogPage } from "./pages/tienda/CatalogPage";
 import { HomePage } from "./pages/tienda/HomePage";
 import { LoginPage, type LoginMode } from "./pages/tienda/LoginPage";
@@ -62,6 +62,7 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>(savedCart);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [brand, setBrand] = useState("");
+  const [category, setCategory] = useState("");
   const [promos, setPromos] = useState(false);
   const [active, setActive] = useState<string | null>(slugFromLocation);
   const pushedProduct = useRef(false);
@@ -201,6 +202,15 @@ export default function App() {
     notify(created ? `¡Listo, ${found.name.split(" ")[0]}! Ya sumás puntos con cada compra.` : `Hola, ${found.name.split(" ")[0]}.`);
   };
 
+  /** Entrar al catálogo siempre fija los filtros: sin argumentos muestra todo, para que no quede pegado el último filtro usado. */
+  const browse = (filters: { brand?: string; category?: string; promos?: boolean } = {}) => {
+    setBrand(filters.brand ?? "");
+    setCategory(filters.category ?? "");
+    setPromos(filters.promos ?? false);
+    navigate("productos");
+  };
+  const goTo = (next: View) => (next === "productos" ? browse() : navigate(next));
+
   const signOut = async () => {
     await logout();
     setUser(null);
@@ -227,14 +237,15 @@ export default function App() {
   return (
     <div className="store min-h-screen">
       <a href="#contenido" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-semibold">Saltar al contenido</a>
-      <StoreHeader signedIn={user !== null} view={view} query={query} cartCount={count} accountOpen={account} onQuery={setQuery} onNavigate={navigate} onAccount={() => { if (user) { refreshUser(); setAccount(true); } else openLogin("ingresar", view); }} />
+      <StoreHeader signedIn={user !== null} view={view} query={query} cartCount={count} accountOpen={account} onQuery={setQuery} onNavigate={goTo} onAccount={() => { if (user) { refreshUser(); setAccount(true); } else openLogin("ingresar", view); }} />
       <div id="contenido">
       {view === "home" ? (
         <HomePage
           products={products}
-          onNavigate={navigate}
-          onBrand={(value) => { setBrand(value); setPromos(false); navigate("productos"); }}
-          onPromos={() => { setBrand(""); setPromos(true); navigate("productos"); }}
+          onNavigate={goTo}
+          onBrand={(value) => browse({ brand: value })}
+          onCategory={(value) => browse({ category: value })}
+          onPromos={() => browse({ promos: true })}
           onOpen={openProduct}
           onInfo={setInfo}
           favorites={favorites}
@@ -243,33 +254,34 @@ export default function App() {
       ) : null}
       {view === "productos" ? (
         <CatalogPage
-          key={`${brand}-${promos}`}
+          key={`${brand}-${category}-${promos}`}
           products={products}
           loadError={catalogError}
           query={query}
           brand={brand}
+          categorySlug={category}
           promos={promos}
           favorites={favorites}
-          onNavigate={navigate}
+          onNavigate={goTo}
           onOpen={openProduct}
           onFavorite={toggleFavorite}
-          onReset={() => { setBrand(""); setPromos(false); }}
+          onReset={() => { setBrand(""); setCategory(""); setPromos(false); }}
           onRetry={loadCatalog}
         />
       ) : null}
-      {view === "combos" ? <CombosPage products={products} inCart={inCart} onNavigate={navigate} onAdd={(variantId) => addToCart(variantId, 1)} /> : null}
-      {view === "canjes" ? <RewardsPage user={user} settings={settings} onNavigate={navigate} onLogin={(mode) => openLogin(mode, "canjes")} onRedeemed={refreshUser} /> : null}
-      {view === "contacto" ? <ContactPage onNavigate={navigate} /> : null}
-      {view === "terminos" || view === "privacidad" || view === "cookies" || view === "garantias" ? <LegalPage key={view} doc={view} settings={settings} onNavigate={navigate} /> : null}
-      {view === "arrepentimiento" ? <RegretPage onNavigate={navigate} /> : null}
-      {view === "pedido" ? <OrderPage onNavigate={navigate} /> : null}
+      {view === "combos" ? <CombosPage products={products} inCart={inCart} onNavigate={goTo} onAdd={(variantId) => addToCart(variantId, 1)} /> : null}
+      {view === "canjes" ? <RewardsPage user={user} settings={settings} onNavigate={goTo} onLogin={(mode) => openLogin(mode, "canjes")} onRedeemed={refreshUser} /> : null}
+      {view === "contacto" ? <ContactPage onNavigate={goTo} /> : null}
+      {view === "terminos" || view === "privacidad" || view === "cookies" || view === "garantias" ? <LegalPage key={view} doc={view} settings={settings} onNavigate={goTo} /> : null}
+      {view === "arrepentimiento" ? <RegretPage onNavigate={goTo} /> : null}
+      {view === "pedido" ? <OrderPage onNavigate={goTo} /> : null}
       {view === "carrito" ? (
         <CartPage
           items={cart}
           products={products}
           user={user}
           settings={settings}
-          onNavigate={navigate}
+          onNavigate={goTo}
           onLogin={() => openLogin("ingresar", "carrito")}
           onQty={(variantId, qty) => setCart((current) => current.map((item) => item.variantId === variantId ? { ...item, qty: Math.min(qty, MAX_PER_ITEM, Math.max(1, stockOf(variantId))) } : item))}
           onRemove={(variantId) => setCart((current) => current.filter((item) => item.variantId !== variantId))}
@@ -277,7 +289,7 @@ export default function App() {
         />
       ) : null}
       </div>
-      <SiteFooter onNavigate={navigate} settings={settings} />
+      <SiteFooter onNavigate={goTo} settings={settings} />
       {account && user ? (
         <AccountDialog
           user={user}
@@ -291,12 +303,8 @@ export default function App() {
         />
       ) : null}
       {product ? <ProductDialog key={product.slug} product={product} settings={settings} inCart={inCart} favorite={favorites.includes(product.slug)} onFavorite={() => toggleFavorite(product.slug)} onAdd={addToCart} onClose={closeProduct} /> : null}
-      {info ? <InfoDialog kind={info} example={products?.find((item) => item.featured && item.type === "PRODUCT")} onClose={() => setInfo(null)} onProducts={() => { setInfo(null); setPromos(false); navigate("productos"); }} /> : null}
+      {info ? <InfoDialog kind={info} example={products?.find((item) => item.featured && item.type === "PRODUCT")} onClose={() => setInfo(null)} onProducts={() => { setInfo(null); browse(); }} /> : null}
       {notice ? <p role="status" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white shadow-lg">{notice}</p> : null}
-      {view === "carrito" ? null : <a href={whatsapp(product ? `Hola wicel, quiero consultar por ${product.name}.` : "Hola wicel, quiero consultar por un producto.")} target="_blank" rel="noreferrer" aria-label="Escribinos por WhatsApp" className="fixed bottom-5 right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#1a9e4b] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(0_0_0/18%)] hover:bg-[#15853f]">
-        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden="true"><path d="M12.04 2C6.58 2 2.15 6.4 2.15 11.83c0 1.74.46 3.44 1.34 4.94L2 22l5.39-1.4a10 10 0 0 0 4.65 1.18h.01c5.46 0 9.89-4.4 9.89-9.83C21.94 6.4 17.5 2 12.04 2Zm5.76 14.16c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.81-.11-.41-.14-.95-.31-1.64-.61-2.88-1.24-4.76-4.14-4.9-4.33-.14-.19-1.16-1.54-1.16-2.94s.73-2.08 1-2.37c.24-.27.64-.39 1.02-.39.12 0 .23 0 .33.01.3.01.44.03.64.49.24.58.82 2 .89 2.15.07.14.12.32.02.51-.1.19-.14.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.12.56.17.27.74 1.22 1.59 1.98 1.09.97 2.01 1.27 2.3 1.41.29.14.46.12.63-.07.17-.19.73-.85.92-1.14.2-.29.39-.24.64-.14.26.1 1.64.77 1.92.91.29.15.48.22.55.34.07.12.07.7-.17 1.38Z" /></svg>
-        WhatsApp
-      </a>}
     </div>
   );
 }

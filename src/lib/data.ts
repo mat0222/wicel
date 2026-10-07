@@ -70,14 +70,23 @@ export const LOW_STOCK = 5;
 /** Igual que Orders::MAX_PER_ITEM en la API. */
 export const MAX_PER_ITEM = 5;
 
-/** Se completa con la configuración del panel: sin CFTEA cargado no se ofrecen cuotas. */
+/** El recargo del panel prende las 12 cuotas. El CFTEA se muestra solo si está cargado. */
 export const financing = { on: false, rate: 0, cftea: "" };
 
 export function setFinancing(settings: { installments_rate?: string; installments_cftea?: string } | null) {
   const rate = (settings?.installments_rate ?? "").trim().replace(",", ".");
+  const parsed = Number(rate);
   financing.cftea = (settings?.installments_cftea ?? "").trim();
-  financing.rate = Number(rate) / 100;
-  financing.on = financing.cftea !== "" && rate !== "" && Number.isFinite(financing.rate);
+  financing.rate = Number.isFinite(parsed) ? parsed / 100 : 0;
+  financing.on = rate !== "" && Number.isFinite(parsed) && parsed >= 0;
+}
+
+/** Cómo se cobran las 12 cuotas, según el recargo del panel. */
+export function installmentCost() {
+  if (!financing.on) return "";
+  const surcharge = Math.round(financing.rate * 1000) / 10;
+  const cost = surcharge > 0 ? `con ${surcharge}% de recargo` : "sin interés";
+  return financing.cftea ? `${cost} (CFTEA ${financing.cftea}%)` : cost;
 }
 
 export function cashPrice(list: number) {
@@ -90,7 +99,7 @@ export function financedTotal(list: number) {
 
 export function cardOffer(list: number) {
   return financing.on
-    ? `${formatPrice(list)} en 1 pago o ${INSTALLMENTS} cuotas de ${formatPrice(installmentAmount(list))} (CFTEA ${financing.cftea}%)`
+    ? `${formatPrice(list)} en 1 pago o ${INSTALLMENTS} cuotas de ${formatPrice(installmentAmount(list))}${financing.cftea ? ` (CFTEA ${financing.cftea}%)` : ""}`
     : `${formatPrice(list)} en 1 pago`;
 }
 

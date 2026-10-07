@@ -15,6 +15,7 @@ export function CatalogPage({
   loadError,
   query,
   brand,
+  categorySlug,
   promos,
   favorites,
   onNavigate,
@@ -27,6 +28,7 @@ export function CatalogPage({
   loadError: string;
   query: string;
   brand: string;
+  categorySlug: string;
   promos: boolean;
   favorites: string[];
   onNavigate: (view: View) => void;
@@ -35,7 +37,7 @@ export function CatalogPage({
   onReset: () => void;
   onRetry: () => void;
 }) {
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(categorySlug);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(brand ? [brand] : []);
   const [selectedStorage, setSelectedStorage] = useState<string[]>([]);
   const [selectedRam, setSelectedRam] = useState<string[]>([]);

@@ -735,7 +735,7 @@ function StoreFormDesk({ onSaved }: { onSaved: (text: string) => void }) {
         onSaved("Guardado. La tienda ya muestra los datos nuevos.");
       });
     }}>
-      <p className="text-sm text-[#d4d4d4]">Se ven en el pie de página, en Contacto, en el botón de WhatsApp y en los emails de pedido.</p>
+      <p className="text-sm text-[#d4d4d4]">Se ven en el pie de página, en Contacto y en los emails de pedido.</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <Field label="Nombre de la tienda" value={store.store_name} onChange={(value) => update("store_name", value)} />
         <Field label="Teléfono y WhatsApp del local" value={store.store_phone} onChange={(value) => update("store_phone", value)} hint="Con código de área, sin 0 ni 15. Ej.: 3541 21-9547" />

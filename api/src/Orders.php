@@ -67,12 +67,12 @@ final class Orders
         return intdiv(max(0, $total), 1000) * max(1, $rate);
     }
 
-    /** Las cuotas solo se ofrecen con el recargo y el CFTEA cargados en el panel. */
+    /** Las cuotas se ofrecen con el recargo del panel. El CFTEA es opcional y se informa si está cargado. */
     public static function financing(PDO $pdo): ?array
     {
         $rate = str_replace(',', '.', Legal::setting($pdo, 'installments_rate'));
         $cftea = Legal::setting($pdo, 'installments_cftea');
-        if ($cftea === '' || !is_numeric($rate)) {
+        if ($rate === '' || !is_numeric($rate)) {
             return null;
         }
 
@@ -220,7 +220,15 @@ final class Orders
             };
             $discount = max(0, $list - $total);
             $installment = $method['installments'] > 1 ? (int) round($total / $method['installments']) : null;
-            $notes = 'Pago elegido: ' . $method['label'] . ($installment ? " ({$method['installments']} cuotas de \${$installment}, CFTEA {$financing['cftea']}%)" : '');
+            $quota = '';
+            if ($installment) {
+                $quota = " ({$method['installments']} cuotas de \${$installment}";
+                if ($financing['cftea'] !== '') {
+                    $quota .= ", CFTEA {$financing['cftea']}%";
+                }
+                $quota .= ')';
+            }
+            $notes = 'Pago elegido: ' . $method['label'] . $quota;
             $snapshot = [
                 'items' => array_map(static fn ($line) => ['name' => $line['name'], 'sku' => $line['sku'], 'qty' => $line['qty'], 'unitPrice' => $line['price'], 'subtotal' => $line['price'] * $line['qty']], $lines),
                 'listTotal' => $list,
@@ -229,7 +237,7 @@ final class Orders
                 'installments' => $method['installments'],
                 'installmentAmount' => $installment,
                 'financeRate' => $payment === 'tarjeta-12' ? $financing['rate'] * 100 : null,
-                'cftea' => $payment === 'tarjeta-12' ? $financing['cftea'] : null,
+                'cftea' => $payment === 'tarjeta-12' && $financing['cftea'] !== '' ? $financing['cftea'] : null,
                 'total' => $total,
                 'delivery' => $delivery === 'PICKUP' ? 'Retiro en el local' : 'Envío a domicilio',
                 'shipping' => $delivery === 'SHIPPING' ? 'Costo y plazo de envío a coordinar antes del pago' : null,
@@ -311,7 +319,7 @@ final class Orders
             'phone' => $phone,
             'address' => $address,
             'delivery' => $delivery,
-            'cftea' => $payment === 'tarjeta-12' ? $financing['cftea'] : null,
+            'cftea' => $payment === 'tarjeta-12' && $financing['cftea'] !== '' ? $financing['cftea'] : null,
             'holdHours' => self::holdHours($pdo),
         ];
         self::notifyNew($pdo, $order, "$first $last", $lines);

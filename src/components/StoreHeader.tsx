@@ -35,12 +35,6 @@ export function StoreHeader({
 
   return (
     <header className="sticky top-0 z-30">
-      <div className="bg-brand text-[#080808]">
-        <div className="mx-auto flex h-9 max-w-[1240px] items-center justify-center gap-6 px-4 text-[13px] font-semibold sm:justify-between">
-          <span>10% menos pagando en efectivo o transferencia</span>
-          <span className="hidden sm:inline">Retirá en el local el mismo día</span>
-        </div>
-      </div>
       <div className="bg-black text-white">
         <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-6 px-4">
           <button type="button" onClick={() => go("home")} className="shrink-0" aria-label="wicel, ir al inicio">
@@ -73,6 +67,11 @@ export function StoreHeader({
                 type="search"
                 value={query}
                 onChange={(event) => onQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  go("productos");
+                }}
                 placeholder="Buscar celulares, termos, relojes..."
                 className="h-10 w-full rounded-full border border-white/15 bg-white/10 pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/50 focus:border-brand"
               />
@@ -97,7 +96,7 @@ export function StoreHeader({
         <div id="menu-movil" className="absolute inset-x-0 top-full border-t border-white/10 bg-black px-4 pb-5 pt-2 text-white shadow-xl lg:hidden">
           <form className="mb-2 md:hidden" role="search" onSubmit={(event) => { event.preventDefault(); go("productos"); }}>
             <label htmlFor="buscar-movil" className="sr-only">Buscar productos, marcas o modelos</label>
-            <input id="buscar-movil" type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Buscar celulares, termos, relojes..." className="h-11 w-full rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/50" />
+            <input id="buscar-movil" type="search" value={query} onChange={(event) => onQuery(event.target.value)} onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); go("productos"); }} placeholder="Buscar celulares, termos, relojes..." className="h-11 w-full rounded-full border border-white/15 bg-white/10 px-4 text-sm text-white outline-none placeholder:text-white/50" />
           </form>
           <nav className="flex flex-col" aria-label="Principal">
             {links.map(([id, label]) => (

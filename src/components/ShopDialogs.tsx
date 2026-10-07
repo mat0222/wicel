@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { ProductPhoto } from "./RealPhoneArt";
-import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../lib/data";
+import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, installmentCost, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../lib/data";
 import { fetchMyOrders, type Account, type Order, type StoreSettings } from "../lib/api";
 import { deliveryText, netOfTaxes, warrantyMonths } from "../lib/legal";
 
@@ -16,7 +16,7 @@ export function PriceBreakdown({ price, compact = false }: { price: number; comp
           <dd className="text-right font-semibold text-ink">
             {INSTALLMENTS} × {formatPrice(installmentAmount(price))}
             <span className="block text-xs font-normal text-muted">total {formatPrice(financedTotal(price))}</span>
-            <span className="block font-bold">CFTEA {financing.cftea}%</span>
+            {financing.cftea ? <span className="block font-bold">CFTEA {financing.cftea}%</span> : null}
           </dd>
         </div>
       ) : null}
@@ -25,8 +25,28 @@ export function PriceBreakdown({ price, compact = false }: { price: number; comp
 }
 
 function Overlay({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+
+  /** Escape cierra, el foco entra al diálogo al abrir y vuelve a donde estaba al cerrar. */
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.querySelector<HTMLElement>("button, a[href], input, select, textarea")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4" onClick={onClose}>
+    <div ref={panel} className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4" onClick={onClose}>
       {children}
     </div>
   );
@@ -301,7 +321,7 @@ export function InfoDialog({ kind, example, onClose, onProducts }: { kind: "punt
           <>
             <p className="mt-4 text-sm leading-relaxed text-muted">
               Efectivo y transferencia tienen 10% de descuento. Con tarjeta pagás el precio de lista en 1 pago
-              {financing.on ? `, o en ${INSTALLMENTS} cuotas con ${Math.round(financing.rate * 1000) / 10}% de recargo (CFTEA ${financing.cftea}%).` : "."}
+              {financing.on ? `, o en ${INSTALLMENTS} cuotas ${installmentCost()}.` : "."}
             </p>
             {example ? (
               <div className="mt-5 rounded-2xl bg-paper p-4">

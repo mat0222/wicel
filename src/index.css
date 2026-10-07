@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource-variable/archivo/wdth-italic.css";
 
 @theme {
   --font-sans: "Archivo Variable", system-ui, sans-serif;
@@ -148,6 +149,18 @@ html:has(.store) #root {
   letter-spacing: -0.025em;
 }
 
+.display-xl {
+  font-stretch: 122%;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+.display-xl em {
+  font-style: italic;
+  font-stretch: 118%;
+}
+
 .wicel-rise {
   animation: wicel-rise 640ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
@@ -157,6 +170,72 @@ html:has(.store) #root {
     opacity: 0;
     transform: translateY(14px);
   }
+}
+
+/* Único momento de motion del inicio: el campo de energía del hero entra una vez y queda quieto. */
+.wicel-charge {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wicel-charge::before,
+.wicel-charge::after {
+  content: "";
+  position: absolute;
+  animation-fill-mode: both;
+}
+
+.wicel-charge::before {
+  inset: -25%;
+  background: repeating-linear-gradient(104deg, rgb(255 216 61 / 24%) 0 2px, transparent 2px 30px);
+  mask-image: radial-gradient(56% 62% at 70% 42%, #000, transparent 70%);
+  animation: wicel-streaks 1100ms cubic-bezier(0.16, 1, 0.3, 1) 140ms;
+}
+
+.wicel-charge::after {
+  inset: 0;
+  background: radial-gradient(40% 50% at 70% 44%, rgb(255 216 61 / 22%), transparent 68%);
+  animation: wicel-glow 1500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes wicel-streaks {
+  from {
+    opacity: 0;
+    transform: translate3d(-5%, 3%, 0) scale(1.1);
+  }
+}
+
+@keyframes wicel-glow {
+  from {
+    opacity: 0;
+  }
+}
+
+/* En una sola columna la foto baja al pie del hero: el campo la sigue en vez de cruzar el titular. */
+@media (max-width: 1023px) {
+  .wicel-charge::before {
+    mask-image: radial-gradient(72% 34% at 50% 84%, #000, transparent 72%);
+  }
+
+  .wicel-charge::after {
+    background: radial-gradient(54% 24% at 50% 84%, rgb(255 216 61 / 22%), transparent 70%);
+  }
+}
+
+/* Las bandas negras del inicio invierten foco y selección, que heredarían el tono claro de la tienda. */
+.wicel-dark ::selection {
+  background: #ffd83d;
+  color: #080808;
+}
+
+.wicel-dark :focus-visible {
+  outline-color: #ffd83d;
+}
+
+html:has(.store) {
+  scrollbar-color: #b7b7b0 var(--color-paper);
 }
 
 .admin-table {
