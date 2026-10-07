@@ -1,3 +1,4 @@
+# Publica dist/ (la tienda compilada). El hosting con PHP sigue usando npm run build, sin GITHUB_PAGES.
 name: Publicar en GitHub Pages
 
 on:
