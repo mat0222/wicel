@@ -4,6 +4,7 @@ import { ProductPhoto } from "./RealPhoneArt";
 import { cashPrice, financedTotal, financing, formatPrice, installmentAmount, installmentCost, INSTALLMENTS, MAX_PER_ITEM, pointSteps, stockLabel, type Product } from "../lib/data";
 import { fetchMyOrders, type Account, type Order, type StoreSettings } from "../lib/api";
 import { deliveryText, netOfTaxes, warrantyMonths } from "../lib/legal";
+import { whatsapp } from "../lib/store";
 
 export function PriceBreakdown({ price, compact = false }: { price: number; compact?: boolean }) {
   return (
@@ -77,16 +78,23 @@ export function ProductDialog({
   onAdd: (variantId: number, qty: number) => void;
   onClose: () => void;
 }) {
-  const firstAvailable = product.colors.find((item) => item.stock > 0) ?? product.colors[0];
+  const firstAvailable = product.colors.find((item) => item.stock > 0) ?? product.colors.find((item) => item.onOrder) ?? product.colors[0];
   const [variantId, setVariantId] = useState(firstAvailable.variantId);
   const [qty, setQty] = useState(1);
   const color = product.colors.find((item) => item.variantId === variantId) ?? firstAvailable;
+  const consult = product.askPrice || color.onOrder;
   const left = Math.max(0, Math.min(color.stock, MAX_PER_ITEM) - inCart(color.variantId));
   const atLimit = color.stock > 0 && inCart(color.variantId) >= Math.min(color.stock, MAX_PER_ITEM);
-  const stock = stockLabel(color.stock);
+  const stock = stockLabel(color.stock, color.onOrder);
   const photo = color.image ?? product.image;
   const facts = [product.storage, product.ram ? `${product.ram} RAM` : "", product.condition === "Usados" ? "Usado" : "Nuevo"].filter(Boolean);
-  const net = netOfTaxes(cashPrice(product.price), settings);
+  const net = product.askPrice ? null : netOfTaxes(cashPrice(product.price), settings);
+  const colorName = color.name ? `, color ${color.name}` : "";
+  const consultText = product.askPrice && color.onOrder
+    ? `Hola wicel, quiero consultar el precio y encargar ${product.name}${colorName}.`
+    : product.askPrice
+      ? `Hola wicel, quiero consultar el precio de ${product.name}${colorName}.`
+      : `Hola wicel, quiero encargar ${product.name}${colorName}.`;
 
   return (
     <Overlay onClose={onClose}>
@@ -109,15 +117,21 @@ export function ProductDialog({
             </ul>
           ) : null}
 
-          <div className="mt-6">
-            <p className="price text-4xl font-bold">{formatPrice(cashPrice(product.price))}</p>
-            <p className="text-sm font-medium text-gold">Precio final en efectivo o transferencia</p>
-            {net !== null ? <p className="price mt-1 text-xs text-muted">Precio sin impuestos nacionales: {formatPrice(net)}</p> : null}
-            {product.oldPrice ? <p className="price mt-1 text-sm text-muted">Precio de lista anterior <s>{formatPrice(product.oldPrice)}</s></p> : null}
-          </div>
-          <div className="mt-4 rounded-2xl bg-paper p-4">
-            <PriceBreakdown price={product.price} />
-          </div>
+          {product.askPrice ? (
+            <p className="mt-6 text-2xl font-bold leading-snug">Consultar precio por WhatsApp</p>
+          ) : (
+            <>
+              <div className="mt-6">
+                <p className="price text-4xl font-bold">{formatPrice(cashPrice(product.price))}</p>
+                <p className="text-sm font-medium text-gold">Precio final en efectivo o transferencia</p>
+                {net !== null ? <p className="price mt-1 text-xs text-muted">Precio sin impuestos nacionales: {formatPrice(net)}</p> : null}
+                {product.oldPrice ? <p className="price mt-1 text-sm text-muted">Precio de lista anterior <s>{formatPrice(product.oldPrice)}</s></p> : null}
+              </div>
+              <div className="mt-4 rounded-2xl bg-paper p-4">
+                <PriceBreakdown price={product.price} />
+              </div>
+            </>
+          )}
 
           {product.type === "PRODUCT" ? (
             <fieldset className="mt-6">
@@ -127,7 +141,7 @@ export function ProductDialog({
                   <button key={item.variantId} type="button" aria-pressed={item.variantId === variantId} onClick={() => { setVariantId(item.variantId); setQty(1); }} className={`flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium ${item.variantId === variantId ? "border-ink" : "border-line text-muted hover:border-[#c9c9c4]"}`}>
                     <span className="h-4 w-4 rounded-full border border-black/15" style={{ background: item.hex }} />
                     {item.name}
-                    {item.stock <= 0 ? <span className="text-xs font-normal">(sin stock)</span> : null}
+                    {item.onOrder ? <span className="text-xs font-normal">(por encargo)</span> : item.stock <= 0 ? <span className="text-xs font-normal">(sin stock)</span> : null}
                   </button>
                 ))}
               </div>
@@ -136,14 +150,22 @@ export function ProductDialog({
           <p className={`mt-4 text-sm font-semibold ${stock.tone}`}>{stock.text}</p>
 
           <div className="mt-5 flex items-center gap-3">
-            <div className="flex h-12 items-center rounded-full border border-line">
-              <button type="button" aria-label="Una unidad menos" className="grid h-12 w-11 place-items-center" onClick={() => setQty((value) => Math.max(1, value - 1))}><Icon name="minus" className="h-4 w-4" /></button>
-              <span className="price w-6 text-center font-semibold">{qty}</span>
-              <button type="button" aria-label="Una unidad más" disabled={qty >= left} className="grid h-12 w-11 place-items-center disabled:opacity-40" onClick={() => setQty((value) => Math.min(left, value + 1))}><Icon name="plus" className="h-4 w-4" /></button>
-            </div>
-            <button type="button" disabled={left <= 0} className="h-12 flex-1 rounded-full bg-ink px-5 font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onAdd(color.variantId, Math.min(qty, left))}>
-              {color.stock <= 0 ? "Sin stock" : atLimit ? (color.stock > MAX_PER_ITEM ? `Máximo ${MAX_PER_ITEM} por pedido` : "Ya tenés todo el stock en el carrito") : "Agregar al carrito"}
-            </button>
+            {consult ? null : (
+              <div className="flex h-12 items-center rounded-full border border-line">
+                <button type="button" aria-label="Una unidad menos" className="grid h-12 w-11 place-items-center" onClick={() => setQty((value) => Math.max(1, value - 1))}><Icon name="minus" className="h-4 w-4" /></button>
+                <span className="price w-6 text-center font-semibold">{qty}</span>
+                <button type="button" aria-label="Una unidad más" disabled={qty >= left} className="grid h-12 w-11 place-items-center disabled:opacity-40" onClick={() => setQty((value) => Math.min(left, value + 1))}><Icon name="plus" className="h-4 w-4" /></button>
+              </div>
+            )}
+            {consult ? (
+              <a href={whatsapp(consultText)} target="_blank" rel="noreferrer" className="flex h-12 flex-1 items-center justify-center rounded-full bg-ink px-5 text-center text-sm font-semibold text-white hover:bg-black">
+                {product.askPrice ? "Consultar precio por WhatsApp" : "Encargar por WhatsApp"}
+              </a>
+            ) : (
+              <button type="button" disabled={left <= 0} className="h-12 flex-1 rounded-full bg-ink px-5 font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-40" onClick={() => onAdd(color.variantId, Math.min(qty, left))}>
+                {color.stock <= 0 ? "Sin stock" : atLimit ? (color.stock > MAX_PER_ITEM ? `Máximo ${MAX_PER_ITEM} por pedido` : "Ya tenés todo el stock en el carrito") : "Agregar al carrito"}
+              </button>
+            )}
             <button type="button" aria-label={favorite ? "Quitar de favoritos" : "Guardar en favoritos"} aria-pressed={favorite} className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border ${favorite ? "border-bad/30 text-bad" : "border-line text-muted hover:text-ink"}`} onClick={onFavorite}>
               <Icon name="heart" filled={favorite} />
             </button>

@@ -48,10 +48,10 @@ export function HomePage({
   const all = products ?? [];
   const items = all.filter((product) => product.type === "PRODUCT");
   const ranked = [...items.filter((product) => product.featured), ...items.filter((product) => !product.featured)];
-  const inStock = ranked.filter((product) => product.stock > 0);
+  const inStock = ranked.filter((product) => product.stock > 0 && !product.askPrice);
   const deals = inStock.filter((product) => product.oldPrice);
   const offers = (deals.length > 0 ? deals : ranked).slice(0, 4);
-  const sample = inStock.find((product) => product.oldPrice) ?? inStock[0] ?? ranked[0];
+  const sample = inStock.find((product) => product.oldPrice) ?? inStock[0];
   const comboList = all.filter((product) => product.type === "COMBO");
   const combos = comboList.slice(0, 3);
 

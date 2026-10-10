@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { ProductPhoto } from "../../components/RealPhoneArt";
-import { cardOffer, cashPrice, conditions, formatPrice, productBadge, stockLabel, type Product, type View } from "../../lib/data";
+import { cardOffer, cashPrice, conditions, formatPrice, madeToOrder, productBadge, stockLabel, type Product, type View } from "../../lib/data";
 
 const pageSize = 9;
 
@@ -64,7 +64,7 @@ export function CatalogPage({
   const brands = useMemo(() => [...new Set(inCategory.map((product) => product.brand))].sort(), [inCategory]);
   const storages = useMemo(() => [...new Set(inCategory.map((product) => product.storage).filter(Boolean))].sort(bySize), [inCategory]);
   const rams = useMemo(() => [...new Set(inCategory.map((product) => product.ram).filter(Boolean))].sort(bySize), [inCategory]);
-  const topPrice = Math.max(0, ...inCategory.map((product) => cashPrice(product.price)));
+  const topPrice = Math.max(0, ...inCategory.filter((product) => !product.askPrice).map((product) => cashPrice(product.price)));
   const priceStep = topPrice > 500000 ? 50000 : 5000;
   const priceCeiling = Math.max(priceStep, Math.ceil(topPrice / priceStep) * priceStep);
   const priceLimit = Math.min(maxPrice ?? priceCeiling, priceCeiling);
@@ -79,12 +79,12 @@ export function CatalogPage({
       if (selectedCondition.length && !selectedCondition.includes(product.condition)) return false;
       if (promoOnly && !product.oldPrice) return false;
       if (inStock && product.stock <= 0) return false;
-      if (maxPrice !== null && cashPrice(product.price) > maxPrice) return false;
+      if (maxPrice !== null && !product.askPrice && cashPrice(product.price) > maxPrice) return false;
       return true;
     });
     const ranked = [...filtered];
-    if (sort === "Menor precio") ranked.sort((a, b) => a.price - b.price);
-    if (sort === "Mayor precio") ranked.sort((a, b) => b.price - a.price);
+    if (sort === "Menor precio") ranked.sort((a, b) => Number(a.askPrice) - Number(b.askPrice) || a.price - b.price);
+    if (sort === "Mayor precio") ranked.sort((a, b) => Number(a.askPrice) - Number(b.askPrice) || b.price - a.price);
     if (sort === "Más relevantes") ranked.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
     return ranked;
   }, [inCategory, query, selectedBrands, selectedStorage, selectedRam, selectedCondition, promoOnly, inStock, maxPrice, sort]);
@@ -228,8 +228,9 @@ export function CatalogPage({
 
 export function ProductCard({ product, list = false, favorite, onOpen, onFavorite }: { product: Product; list?: boolean; favorite: boolean; onOpen: () => void; onFavorite: () => void }) {
   const badge = productBadge(product);
-  const stock = stockLabel(product.stock);
-  const soldOut = product.stock <= 0;
+  const onOrder = madeToOrder(product);
+  const stock = stockLabel(product.stock, onOrder);
+  const soldOut = product.stock <= 0 && !onOrder;
   return (
     <article className={`wicel-card group relative rounded-2xl ${list ? "flex items-center gap-5 p-3 pr-5" : "flex flex-col p-3"}`}>
       <div className={`relative rounded-xl bg-white ${list ? "w-32 shrink-0" : ""}`}>
@@ -257,11 +258,17 @@ export function ProductCard({ product, list = false, favorite, onOpen, onFavorit
             {product.colors.map((color) => <span key={color.variantId} title={color.name} className="h-3.5 w-3.5 rounded-full border border-black/15" style={{ background: color.hex }} />)}
           </div>
         ) : null}
-        <p className="price mt-3 text-2xl font-bold">{formatPrice(cashPrice(product.price))}</p>
-        <p className="text-xs font-medium text-gold">Precio en efectivo o transferencia</p>
-        <p className="price mt-1.5 text-sm text-muted">
-          Tarjeta {product.oldPrice ? <s className="mr-1">{formatPrice(product.oldPrice)}</s> : null}{cardOffer(product.price)}
-        </p>
+        {product.askPrice ? (
+          <p className="mt-3 text-lg font-bold leading-snug">Consultar precio por WhatsApp</p>
+        ) : (
+          <>
+            <p className="price mt-3 text-2xl font-bold">{formatPrice(cashPrice(product.price))}</p>
+            <p className="text-xs font-medium text-gold">Precio en efectivo o transferencia</p>
+            <p className="price mt-1.5 text-sm text-muted">
+              Tarjeta {product.oldPrice ? <s className="mr-1">{formatPrice(product.oldPrice)}</s> : null}{cardOffer(product.price)}
+            </p>
+          </>
+        )}
         <p className={`mt-2 text-xs font-semibold ${stock.tone}`}>{stock.text}</p>
       </div>
     </article>

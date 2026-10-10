@@ -5,6 +5,10 @@ declare(strict_types=1);
 final class Catalog
 {
     public const LOW_STOCK = 5;
+    /** El usuario de la base no puede crear columnas. Esta marca en short_description indica que el precio se consulta por WhatsApp. */
+    private const ASK_PRICE = 'ASK_PRICE';
+    /** weight_grams no se usa para pesar: 1 significa que ese color es por encargo. */
+    private const ON_ORDER = 1;
     private const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
     private const PHOTO_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
 
@@ -17,7 +21,7 @@ final class Catalog
     public static function products(PDO $pdo): array
     {
         $rows = $pdo->query(
-            'SELECT p.id, p.slug, p.name, p.description, p.product_type, p.is_featured, p.category_id,
+            'SELECT p.id, p.slug, p.name, p.description, p.short_description, p.product_type, p.is_featured, p.category_id,
                     p.created_at, b.name AS brand, c.name AS category, c.slug AS category_slug, c.phone_specs
              FROM products p
              INNER JOIN brands b ON b.id = p.brand_id
@@ -27,7 +31,7 @@ final class Catalog
         )->fetchAll();
 
         $variants = $pdo->prepare(
-            'SELECT v.id, v.product_id, v.ram_gb, v.condition_type, v.sale_price, v.compare_at_price,
+            'SELECT v.id, v.product_id, v.ram_gb, v.condition_type, v.sale_price, v.compare_at_price, v.weight_grams,
                     s.label AS storage, col.name AS color, col.hex_code AS hex,
                     COALESCE(i.quantity, 0) AS stock,
                     (SELECT pi.image_url FROM product_images pi WHERE pi.variant_id = v.id ORDER BY pi.is_primary DESC, pi.position, pi.id LIMIT 1) AS image
@@ -103,7 +107,7 @@ final class Catalog
                 $stock = min($stock, $part ? intdiv((int) $part['stock'], $item['quantity']) : 0);
                 $image ??= $part['image'] ?? null;
             }
-            $colors[] = ['variantId' => (int) $first['id'], 'name' => '', 'hex' => '', 'stock' => $stock, 'image' => $image];
+            $colors[] = ['variantId' => (int) $first['id'], 'name' => '', 'hex' => '', 'stock' => $stock, 'onOrder' => false, 'image' => $image];
         } else {
             foreach ($variants as $variant) {
                 $colors[] = [
@@ -111,6 +115,7 @@ final class Catalog
                     'name' => $variant['color'] ?? 'Único',
                     'hex' => $variant['hex'] ?? '#888888',
                     'stock' => (int) $variant['stock'],
+                    'onOrder' => (int) ($variant['weight_grams'] ?? 0) === self::ON_ORDER,
                     'image' => $variant['image'],
                 ];
             }
@@ -138,6 +143,7 @@ final class Catalog
             'description' => (string) $row['description'],
             'specs' => $lines,
             'featured' => (bool) $row['is_featured'],
+            'askPrice' => !$isCombo && ($row['short_description'] ?? '') === self::ASK_PRICE,
             'image' => $images[0] ?? null,
             'colors' => $colors,
             'stock' => array_sum(array_column($colors, 'stock')),
@@ -258,8 +264,9 @@ final class Catalog
         $storage = trim((string) ($data['storage'] ?? ''));
         $ram = (int) preg_replace('/\D/', '', (string) ($data['ram'] ?? ''));
         $condition = ($data['condition'] ?? '') === 'Usados' ? 'USED' : 'NEW';
-        $price = (int) ($data['price'] ?? 0);
-        $oldPrice = (int) ($data['oldPrice'] ?? 0);
+        $askPrice = !empty($data['askPrice']);
+        $price = $askPrice ? 0 : (int) ($data['price'] ?? 0);
+        $oldPrice = $askPrice ? 0 : (int) ($data['oldPrice'] ?? 0);
         $description = trim((string) ($data['description'] ?? ''));
         $featured = !empty($data['featured']) ? 1 : 0;
         $colors = is_array($data['colors'] ?? null) ? $data['colors'] : [];
@@ -267,7 +274,7 @@ final class Catalog
         if ($name === '' || $brand === '') {
             return 'Escribí el nombre y la marca.';
         }
-        if ($price <= 0) {
+        if (!$askPrice && $price <= 0) {
             return 'Escribí el precio en pesos, sin centavos.';
         }
         if ($oldPrice !== 0 && $oldPrice <= $price) {
@@ -281,6 +288,9 @@ final class Catalog
             return 'Cada color tiene que tener nombre y no se puede repetir.';
         }
         foreach ($colors as $color) {
+            if (!empty($color['onOrder'])) {
+                continue;
+            }
             if (!is_numeric($color['stock'] ?? null) || (int) $color['stock'] < 0) {
                 return 'Escribí cuántas unidades hay de cada color. Puede ser 0.';
             }
@@ -324,14 +334,14 @@ final class Catalog
             $brandId = self::brandId($pdo, $brand);
             if ($id > 0) {
                 $pdo->prepare(
-                    "UPDATE products SET brand_id = ?, category_id = ?, name = ?, description = ?, is_featured = ?, product_type = ?
+                    "UPDATE products SET brand_id = ?, category_id = ?, name = ?, description = ?, short_description = ?, is_featured = ?, product_type = ?
                      WHERE id = ? AND product_type <> 'COMBO'"
-                )->execute([$brandId, $categoryId, $name, $description, $featured, $type, $id]);
+                )->execute([$brandId, $categoryId, $name, $description, $askPrice ? self::ASK_PRICE : null, $featured, $type, $id]);
             } else {
                 $pdo->prepare(
-                    "INSERT INTO products (brand_id, category_id, name, slug, description, product_type, warranty_months, is_featured)
-                     VALUES (?, ?, ?, ?, ?, ?, 0, ?)"
-                )->execute([$brandId, $categoryId, $name, self::uniqueSlug($pdo, 'products', $name), $description, $type, $featured]);
+                    "INSERT INTO products (brand_id, category_id, name, slug, description, short_description, product_type, warranty_months, is_featured)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)"
+                )->execute([$brandId, $categoryId, $name, self::uniqueSlug($pdo, 'products', $name), $description, $askPrice ? self::ASK_PRICE : null, $type, $featured]);
                 $id = (int) $pdo->lastInsertId();
             }
 
@@ -343,22 +353,23 @@ final class Catalog
             foreach ($colors as $index => $color) {
                 $colorId = self::colorId($pdo, trim((string) $color['color']));
                 $variantId = (int) ($color['variantId'] ?? 0);
-                $fields = [$colorId, $storageId, $ram ?: null, $condition, $price, $oldPrice ?: null];
+                $onOrder = !empty($color['onOrder']);
+                $fields = [$colorId, $storageId, $ram ?: null, $condition, $price, $oldPrice ?: null, $onOrder ? self::ON_ORDER : null];
                 if ($variantId > 0 && in_array($variantId, $current, true)) {
                     $pdo->prepare(
                         'UPDATE product_variants SET color_id = ?, storage_id = ?, ram_gb = ?, condition_type = ?,
-                                sale_price = ?, compare_at_price = ?, is_active = 1 WHERE id = ?'
+                                sale_price = ?, compare_at_price = ?, weight_grams = ?, is_active = 1 WHERE id = ?'
                     )->execute([...$fields, $variantId]);
                 } else {
                     $pdo->prepare(
-                        'INSERT INTO product_variants (color_id, storage_id, ram_gb, condition_type, sale_price, compare_at_price, product_id, sku)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                        'INSERT INTO product_variants (color_id, storage_id, ram_gb, condition_type, sale_price, compare_at_price, weight_grams, product_id, sku)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
                     )->execute([...$fields, $id, 'WI-' . $id . '-' . strtoupper(bin2hex(random_bytes(4)))]);
                     $variantId = (int) $pdo->lastInsertId();
                 }
                 $kept[] = $variantId;
 
-                self::setStock($pdo, $warehouse, $variantId, (int) $color['stock'], $userId);
+                self::setStock($pdo, $warehouse, $variantId, $onOrder ? 0 : (int) $color['stock'], $userId);
 
                 if (isset($saved[$index])) {
                     $pdo->prepare('DELETE FROM product_images WHERE variant_id = ?')->execute([$variantId]);
@@ -549,7 +560,12 @@ final class Catalog
         if ($id) {
             return (int) $id;
         }
-        $pdo->prepare('INSERT INTO colors (name) VALUES (?)')->execute([limit_text($name, 60)]);
+        $hex = [
+            'naranja' => '#e8732a', 'burdeos' => '#6d1f2c', 'turquesa' => '#2bb3a8', 'crema' => '#efe6d2',
+            'natural' => '#e8dcc4', 'marrón' => '#7b4a32', 'verde lima' => '#b5c934', 'verde oliva' => '#7d8b5a',
+            'lima y fucsia' => '#c9e27a', 'crema con moños' => '#f3e3c4', 'crema con mapa' => '#efe8d6',
+        ][mb_strtolower($name)] ?? null;
+        $pdo->prepare('INSERT INTO colors (name, hex_code) VALUES (?, ?)')->execute([limit_text($name, 60), $hex]);
 
         return (int) $pdo->lastInsertId();
     }

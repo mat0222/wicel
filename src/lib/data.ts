@@ -34,7 +34,7 @@ export type AdminSection =
   | "legal"
   | "configuracion";
 
-export type ProductColor = { variantId: number; name: string; hex: string; stock: number; image: string | null };
+export type ProductColor = { variantId: number; name: string; hex: string; stock: number; image: string | null; onOrder: boolean };
 
 export type Product = {
   id: number;
@@ -55,6 +55,8 @@ export type Product = {
   description: string;
   specs: string[];
   featured: boolean;
+  /** El precio no se publica: el cliente lo pregunta por WhatsApp. */
+  askPrice: boolean;
   image: string | null;
   colors: ProductColor[];
   stock: number;
@@ -128,10 +130,16 @@ export function imageUrl(url: string | null) {
   return url.startsWith("/api/") || url.startsWith("http") ? url : publicUrl(url);
 }
 
-export function stockLabel(stock: number) {
+export function stockLabel(stock: number, onOrder = false) {
+  if (onOrder) return { text: "Por encargo", tone: "text-gold" };
   if (stock <= 0) return { text: "Sin stock", tone: "text-bad" };
   if (stock <= LOW_STOCK) return { text: stock === 1 ? "Queda 1 unidad" : `Quedan ${stock} unidades`, tone: "text-gold" };
   return { text: "En stock", tone: "text-ok" };
+}
+
+/** Todos los colores se consiguen por encargo: no es un producto agotado. */
+export function madeToOrder(product: Pick<Product, "colors">) {
+  return product.colors.length > 0 && product.colors.every((color) => color.onOrder);
 }
 
 export function productBadge(product: Product) {

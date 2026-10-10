@@ -166,6 +166,12 @@ export default function App() {
   };
 
   const addToCart = (variantId: number, qty: number) => {
+    const owner = products?.find((item) => item.colors.some((color) => color.variantId === variantId));
+    const color = owner?.colors.find((item) => item.variantId === variantId);
+    if (!owner || !color || owner.askPrice || color.onOrder) {
+      notify("Ese producto se pide por WhatsApp.");
+      return;
+    }
     const room = Math.min(stockOf(variantId), MAX_PER_ITEM) - inCart(variantId);
     if (room <= 0) {
       notify(inCart(variantId) >= MAX_PER_ITEM ? `Por pedido se pueden llevar hasta ${MAX_PER_ITEM} unidades de cada producto. Para más, escribinos.` : "No queda más stock de ese producto.");
@@ -303,7 +309,7 @@ export default function App() {
         />
       ) : null}
       {product ? <ProductDialog key={product.slug} product={product} settings={settings} inCart={inCart} favorite={favorites.includes(product.slug)} onFavorite={() => toggleFavorite(product.slug)} onAdd={addToCart} onClose={closeProduct} /> : null}
-      {info ? <InfoDialog kind={info} example={products?.find((item) => item.featured && item.type === "PRODUCT")} onClose={() => setInfo(null)} onProducts={() => { setInfo(null); browse(); }} /> : null}
+      {info ? <InfoDialog kind={info} example={products?.find((item) => item.featured && item.type === "PRODUCT" && !item.askPrice && item.price > 0)} onClose={() => setInfo(null)} onProducts={() => { setInfo(null); browse(); }} /> : null}
       {notice ? <p role="status" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white shadow-lg">{notice}</p> : null}
     </div>
   );

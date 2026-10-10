@@ -161,7 +161,7 @@ final class Orders
             $needs = [];
             foreach ($wanted as $variantId => $qty) {
                 $stmt = $pdo->prepare(
-                    'SELECT v.id, v.sku, v.sale_price, p.name, p.product_type, col.name AS color
+                    'SELECT v.id, v.sku, v.sale_price, v.weight_grams, p.short_description, p.name, p.product_type, col.name AS color
                      FROM product_variants v
                      INNER JOIN products p ON p.id = v.product_id AND p.is_active = 1
                      LEFT JOIN colors col ON col.id = v.color_id
@@ -174,6 +174,10 @@ final class Orders
                     return 'Uno de los productos del carrito ya no está a la venta. Sacalo y probá de nuevo.';
                 }
                 $label = $row['name'] . ($row['color'] ? ' · ' . $row['color'] : '');
+                if (($row['short_description'] ?? '') === 'ASK_PRICE' || (int) ($row['weight_grams'] ?? 0) === 1) {
+                    $pdo->rollBack();
+                    return $label . ' se pide por WhatsApp. Sacalo del carrito para seguir.';
+                }
                 $lines[] = ['variant' => $variantId, 'sku' => $row['sku'], 'name' => $label, 'qty' => $qty, 'price' => (int) round((float) $row['sale_price'])];
 
                 if ($row['product_type'] === 'COMBO') {
@@ -618,7 +622,7 @@ final class Orders
              INNER JOIN products p ON p.id = v.product_id AND p.is_active = 1 AND p.product_type <> 'COMBO'
              LEFT JOIN colors col ON col.id = v.color_id
              LEFT JOIN inventory_stock i ON i.variant_id = v.id
-             WHERE v.is_active = 1 AND COALESCE(i.quantity, 0) <= ?
+             WHERE v.is_active = 1 AND (v.weight_grams IS NULL OR v.weight_grams <> 1) AND COALESCE(i.quantity, 0) <= ?
              ORDER BY stock, p.name"
         );
         $low->execute([Catalog::LOW_STOCK]);

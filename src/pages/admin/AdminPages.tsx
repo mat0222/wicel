@@ -230,7 +230,7 @@ function parsePesos(text: string) {
   return Number(text.trim().replace(/,\d{1,2}$/, "").replace(/\D/g, "")) || 0;
 }
 
-type ColorRow = { key: number; variantId: number | null; color: string; stock: string; image: string | null; file: File | null; preview: string | null };
+type ColorRow = { key: number; variantId: number | null; color: string; stock: string; onOrder: boolean; image: string | null; file: File | null; preview: string | null };
 type ProductForm = {
   id: number | null;
   name: string;
@@ -241,13 +241,14 @@ type ProductForm = {
   ram: string;
   price: string;
   oldPrice: string;
+  askPrice: boolean;
   description: string;
   featured: boolean;
   colors: ColorRow[];
 };
 
 let rowKey = 0;
-const newRow = (): ColorRow => ({ key: ++rowKey, variantId: null, color: "", stock: "", image: null, file: null, preview: null });
+const newRow = (): ColorRow => ({ key: ++rowKey, variantId: null, color: "", stock: "", onOrder: false, image: null, file: null, preview: null });
 
 const inputClass = "mt-1 h-10 w-full rounded-lg border border-[#4a4a4a] bg-[#1a1a1a] px-3 text-sm text-white placeholder:text-[#A7A7A7]";
 
@@ -285,7 +286,7 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
 
   const openNew = () => {
     say("");
-    setForm({ id: null, name: "", brand: "", categoryId: tab || String(productCategories[0]?.id ?? ""), condition: "Nuevos", storage: "", ram: "", price: "", oldPrice: "", description: "", featured: false, colors: [newRow()] });
+    setForm({ id: null, name: "", brand: "", categoryId: tab || String(productCategories[0]?.id ?? ""), condition: "Nuevos", storage: "", ram: "", price: "", oldPrice: "", askPrice: false, description: "", featured: false, colors: [newRow()] });
     window.setTimeout(() => document.getElementById("form-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
   };
 
@@ -299,11 +300,12 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
       condition: product.condition,
       storage: product.storage,
       ram: product.ram,
-      price: product.price.toLocaleString("es-AR"),
-      oldPrice: product.oldPrice ? product.oldPrice.toLocaleString("es-AR") : "",
+      price: product.askPrice ? "" : product.price.toLocaleString("es-AR"),
+      oldPrice: product.askPrice || !product.oldPrice ? "" : product.oldPrice.toLocaleString("es-AR"),
+      askPrice: product.askPrice,
       description: product.description,
       featured: product.featured,
-      colors: product.colors.map((color) => ({ key: ++rowKey, variantId: color.variantId, color: color.name, stock: String(color.stock), image: color.image, file: null, preview: null })),
+      colors: product.colors.map((color) => ({ key: ++rowKey, variantId: color.variantId, color: color.name, stock: color.onOrder ? "" : String(color.stock), onOrder: color.onOrder, image: color.image, file: null, preview: null })),
     });
     window.setTimeout(() => document.getElementById("form-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
   };
@@ -320,12 +322,12 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
     if (!form.name.trim()) problems.push("Escribí el nombre.");
     if (!form.brand.trim()) problems.push("Escribí la marca.");
     if (!form.categoryId) problems.push("Elegí una categoría.");
-    if (price <= 0) problems.push("Escribí el precio en pesos, por ejemplo 249.999.");
-    if (oldPrice && oldPrice <= price) problems.push("El precio anterior tiene que ser más alto que el actual, o dejalo vacío.");
+    if (!form.askPrice && price <= 0) problems.push("Escribí el precio en pesos, por ejemplo 249.999.");
+    if (!form.askPrice && oldPrice && oldPrice <= price) problems.push("El precio anterior tiene que ser más alto que el actual, o dejalo vacío.");
     if (form.colors.length === 0) problems.push("Agregá al menos un color.");
     if (form.colors.some((row) => !row.color)) problems.push("Elegí el color de cada fila.");
     if (new Set(form.colors.map((row) => row.color)).size !== form.colors.length) problems.push("Hay un color repetido.");
-    if (form.colors.some((row) => row.stock.trim() === "" || !/^\d+$/.test(row.stock.trim()))) problems.push("Escribí cuántas unidades hay de cada color (puede ser 0).");
+    if (form.colors.some((row) => !row.onOrder && (row.stock.trim() === "" || !/^\d+$/.test(row.stock.trim())))) problems.push("Escribí cuántas unidades hay de cada color (puede ser 0).");
     if (problems.length > 0) {
       say(problems.join(" "), true);
       return;
@@ -341,11 +343,12 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
       condition: form.condition,
       storage: isPhone ? form.storage : "",
       ram: isPhone ? form.ram : "",
-      price,
-      oldPrice: oldPrice || null,
+      price: form.askPrice ? 0 : price,
+      oldPrice: form.askPrice ? null : oldPrice || null,
+      askPrice: form.askPrice,
       description: form.description.trim(),
       featured: form.featured,
-      colors: form.colors.map((row) => ({ variantId: row.variantId, color: row.color, stock: Number(row.stock) })),
+      colors: form.colors.map((row) => ({ variantId: row.variantId, color: row.color, stock: row.onOrder ? 0 : Number(row.stock), onOrder: row.onOrder })),
     }));
     try {
       for (const [index, row] of form.colors.entries()) {
@@ -362,7 +365,8 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
       say(result.error, true);
       return;
     }
-    say(form.id ? `Listo, ${form.name.trim()} quedó actualizado. Ya se ve así en la tienda.` : `Listo, ${form.name.trim()} ya está a la venta en la tienda a ${formatPrice(cashPrice(price))} contado.`);
+    const published = form.askPrice ? "El precio se consulta por WhatsApp." : `Ya se ve a ${formatPrice(cashPrice(price))} contado.`;
+    say(form.id ? `Listo, ${form.name.trim()} quedó actualizado. ${published}` : `Listo, ${form.name.trim()} ya está en la tienda. ${published}`);
     setForm(null);
     load();
     onChange();
@@ -468,12 +472,17 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
                     </select>
                   </label>
                 </div> : null}
-                <label className="text-xs font-semibold text-[#d4d4d4]">Precio de lista en pesos (tarjeta 1 pago)
-                  <input name="precio" inputMode="numeric" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="Ej.: 249.999" className={inputClass} />
-                  <span className="mt-1 block font-normal text-[#A7A7A7]">{price > 0 ? `Se publica a ${formatPrice(price)} · contado ${formatPrice(cashPrice(price))}` : "Podés escribirlo con o sin puntos."}</span>
-                </label>
+                <div className="text-xs font-semibold text-[#d4d4d4]">
+                  <label htmlFor="precio">Precio de lista en pesos (tarjeta 1 pago)</label>
+                  <input id="precio" name="precio" inputMode="numeric" value={form.price} disabled={form.askPrice} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="Ej.: 249.999" className={`${inputClass} disabled:opacity-40`} />
+                  <label htmlFor="consultar-precio" className="mt-2 flex items-center gap-2 font-normal text-sm text-[#d4d4d4]">
+                    <input id="consultar-precio" name="consultar-precio" type="checkbox" checked={form.askPrice} onChange={(event) => setForm({ ...form, askPrice: event.target.checked, price: event.target.checked ? "" : form.price, oldPrice: event.target.checked ? "" : form.oldPrice })} className="h-4 w-4 accent-[#FFD83D]" />
+                    Consultar el precio por WhatsApp
+                  </label>
+                  <span className="mt-1 block font-normal text-[#A7A7A7]">{form.askPrice ? "En la tienda no se muestra un precio. El cliente lo pregunta por WhatsApp." : price > 0 ? `Se publica a ${formatPrice(price)} · contado ${formatPrice(cashPrice(price))}` : "Podés escribirlo con o sin puntos."}</span>
+                </div>
                 <label className="text-xs font-semibold text-[#d4d4d4]">Precio anterior (opcional, sale tachado)
-                  <input name="precio-anterior" inputMode="numeric" value={form.oldPrice} onChange={(event) => setForm({ ...form, oldPrice: event.target.value })} placeholder="Ej.: 299.999" className={inputClass} />
+                  <input name="precio-anterior" inputMode="numeric" value={form.oldPrice} disabled={form.askPrice} onChange={(event) => setForm({ ...form, oldPrice: event.target.value })} placeholder="Ej.: 299.999" className={`${inputClass} disabled:opacity-40`} />
                 </label>
                 <label className="flex items-center gap-2 self-center text-sm text-[#d4d4d4]">
                   <input name="destacado" type="checkbox" checked={form.featured} onChange={(event) => setForm({ ...form, featured: event.target.checked })} className="h-4 w-4 accent-[#FFD83D]" />
@@ -491,7 +500,7 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
                   {form.colors.map((row, index) => {
                     const photo = row.preview ?? imageUrl(row.image);
                     return (
-                      <div key={row.key} className="grid items-end gap-3 rounded-lg border border-[#4a4a4a] p-3 sm:grid-cols-[72px_1fr_110px_1fr_auto]">
+                      <div key={row.key} className="grid items-end gap-3 rounded-lg border border-[#4a4a4a] p-3 sm:grid-cols-[72px_1fr_10rem_1fr_auto]">
                         <div className="grid h-[72px] w-[72px] place-items-center overflow-hidden rounded-lg bg-[#1a1a1a] text-[10px] text-[#A7A7A7]">
                           {photo ? <img src={photo} alt="" className="h-full w-full object-contain" /> : "Sin foto"}
                         </div>
@@ -501,9 +510,14 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
                             {options.colors.map((color) => <option key={color.name}>{color.name}</option>)}
                           </select>
                         </label>
-                        <label className="text-xs font-semibold text-[#d4d4d4]">Unidades
-                          <input name={`unidades-${index}`} inputMode="numeric" value={row.stock} onChange={(event) => setRow(row.key, { stock: event.target.value })} placeholder="Ej.: 3" className={inputClass} />
-                        </label>
+                        <div className="text-xs font-semibold text-[#d4d4d4]">
+                          <label htmlFor={`unidades-${index}`}>Unidades</label>
+                          <input id={`unidades-${index}`} name={`unidades-${index}`} inputMode="numeric" value={row.stock} disabled={row.onOrder} onChange={(event) => setRow(row.key, { stock: event.target.value })} placeholder="Ej.: 3" className={`${inputClass} disabled:opacity-40`} />
+                          <label htmlFor={`encargo-${index}`} className="mt-2 flex items-center gap-2 font-normal text-sm text-[#d4d4d4]">
+                            <input id={`encargo-${index}`} name={`encargo-${index}`} type="checkbox" checked={row.onOrder} onChange={(event) => setRow(row.key, { onOrder: event.target.checked, stock: event.target.checked ? "" : row.stock })} className="h-4 w-4 accent-[#FFD83D]" />
+                            Por encargo
+                          </label>
+                        </div>
                         <label className="text-xs font-semibold text-[#d4d4d4]">{photo ? "Cambiar foto" : "Subir foto"}
                           <input name={`foto-${index}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
                             const file = event.target.files?.[0] ?? null;
@@ -561,18 +575,18 @@ function ProductsAdmin({ onChange }: { onChange: () => void }) {
                       <span className="block text-xs text-[#A7A7A7]">{[product.category, product.condition === "Usados" ? "Usado" : "Nuevo", product.featured ? "Destacado" : ""].filter(Boolean).join(" · ")}</span>
                     </td>
                     <td>{product.brand}</td>
-                    <td>{formatPrice(product.price)}{product.oldPrice ? <span className="block text-xs text-[#A7A7A7] line-through">{formatPrice(product.oldPrice)}</span> : null}</td>
+                    <td>{product.askPrice ? "Consultar por WhatsApp" : <>{formatPrice(product.price)}{product.oldPrice ? <span className="block text-xs text-[#A7A7A7] line-through">{formatPrice(product.oldPrice)}</span> : null}</>}</td>
                     <td className="text-xs">
                       {product.colors.map((color) => (
-                        <span key={color.variantId} className={`mr-2 inline-flex items-center gap-1 ${color.stock <= LOW_STOCK ? "font-bold text-[#FFD83D]" : ""}`}>
+                        <span key={color.variantId} className={`mr-2 inline-flex items-center gap-1 ${!color.onOrder && color.stock <= LOW_STOCK ? "font-bold text-[#FFD83D]" : ""}`}>
                           <span className="h-2.5 w-2.5 rounded-full border border-black/20" style={{ background: color.hex }} />
-                          {color.name}: {color.stock}
+                          {color.name}: {color.onOrder ? "por encargo" : color.stock}
                         </span>
                       ))}
                     </td>
                     <td>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.stock === 0 ? "bg-[#3a1212] text-[#fecaca]" : product.stock <= LOW_STOCK ? "bg-[#3a2a00] text-[#FFD83D]" : "bg-[#123024] text-[#86efac]"}`}>
-                        {product.stock === 0 ? "Sin stock" : product.stock <= LOW_STOCK ? "Poco stock" : "A la venta"}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.colors.every((color) => color.onOrder) ? "bg-[#3a2a00] text-[#FFD83D]" : product.stock === 0 ? "bg-[#3a1212] text-[#fecaca]" : product.stock <= LOW_STOCK ? "bg-[#3a2a00] text-[#FFD83D]" : "bg-[#123024] text-[#86efac]"}`}>
+                        {product.colors.every((color) => color.onOrder) ? "Por encargo" : product.stock === 0 ? "Sin stock" : product.stock <= LOW_STOCK ? "Poco stock" : "A la venta"}
                       </span>
                     </td>
                     <td>
